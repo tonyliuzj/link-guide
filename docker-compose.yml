@@ -1,0 +1,13 @@
+services:
+  link-guide:
+    container_name: link-guide
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env.local
+    ports:
+      - "${HOST_PORT:-3000}:3000"
+    volumes:
+      - ./data:/app/data
