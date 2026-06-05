@@ -34,11 +34,11 @@ export function PasswordPage({
       const res = await fetch(apiUrl, {
         method: "POST",
         body: formData,
-        redirect: "manual"
+        redirect: "follow"
       })
 
-      if (res.type === "opaqueredirect") {
-        window.location.href = res.url || "/"
+      if (res.redirected) {
+        window.location.href = res.url
         return
       }
 
@@ -47,11 +47,6 @@ export function PasswordPage({
         setError(text || "Invalid password")
         setIsSubmitting(false)
         return
-      }
-
-      const redirectUrl = res.headers.get("Location")
-      if (redirectUrl) {
-        window.location.href = redirectUrl
       }
     } catch (err) {
       setError("Failed to verify password")
