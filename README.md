@@ -55,6 +55,7 @@ Edit `.env.local` and set:
 
 - **SESSION_PASSWORD**: A random secret string for session encryption
   - Generate with: `openssl rand -base64 32`
+- **AUTH_TRUST_HOST**: Set to `true` for reverse proxies, custom domains, and production hosts
 - **DATABASE_URL**: Database file path (default: `./data/linkguide.db`)
 - **PORT**: Server port (default: `3000`)
 
@@ -62,6 +63,7 @@ Example `.env.local`:
 
 ```env
 SESSION_PASSWORD=your-random-32-character-secret-here
+AUTH_TRUST_HOST=true
 DATABASE_URL=./data/linkguide.db
 PORT=3000
 ```

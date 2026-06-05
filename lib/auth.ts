@@ -3,6 +3,8 @@ import Credentials from "next-auth/providers/credentials"
 import { compare } from "bcryptjs"
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  trustHost: true,
+  secret: process.env.SESSION_PASSWORD,
   providers: [
     Credentials({
       credentials: {

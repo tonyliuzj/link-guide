@@ -518,6 +518,9 @@ write_direct_env_file() {
 # Session secret for NextAuth (generate a random string)
 SESSION_PASSWORD=$SESSION_PASS
 
+# Trust the host header behind reverse proxies and custom domains
+AUTH_TRUST_HOST=true
+
 # Database location (default: ./data/link-guide.sqlite)
 DATABASE_URL=$DIRECT_DATABASE_PATH
 
@@ -534,6 +537,9 @@ write_docker_env_files() {
 
 # Session secret for NextAuth (generate a random string)
 SESSION_PASSWORD=$SESSION_PASS
+
+# Trust the host header behind reverse proxies and custom domains
+AUTH_TRUST_HOST=true
 
 # Database location (default: /app/data/link-guide.sqlite)
 DATABASE_URL=$DOCKER_DATABASE_PATH
