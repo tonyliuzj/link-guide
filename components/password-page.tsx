@@ -63,7 +63,7 @@ export function PasswordPage({
           )}
           <button
             type="submit"
-            disabled={showTurnstile && !turnstileCompleted}
+            disabled={showTurnstile ? !turnstileCompleted : false}
             className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Submit
