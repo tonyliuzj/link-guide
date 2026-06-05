@@ -220,10 +220,6 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                           <Switch id="turnstileEnabled" checked={turnstileEnabled} onCheckedChange={setTurnstileEnabled} />
                         </div>
                       )}
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="allowSkip">Allow Skip</Label>
-                        <Switch id="allowSkip" checked={allowSkip} onCheckedChange={setAllowSkip} />
-                      </div>
                     </CardContent>
                   </Card>
                 )}
