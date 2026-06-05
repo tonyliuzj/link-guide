@@ -12,11 +12,13 @@ import { Copy, Check } from "lucide-react"
 export function GuestLinkForm({
   domains,
   turnstileSiteKey,
-  turnstileRequired = false
+  turnstileRequired = false,
+  siteDomain
 }: {
   domains: any[]
   turnstileSiteKey?: string
   turnstileRequired?: boolean
+  siteDomain: string
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [createdLink, setCreatedLink] = useState<string | null>(null)
@@ -79,7 +81,11 @@ export function GuestLinkForm({
     formData.set("mode", mode)
 
     try {
-      const res = await fetch("/api/guest/create", {
+      const apiUrl = siteDomain
+        ? `https://${siteDomain}/api/guest/create`
+        : "/api/guest/create"
+
+      const res = await fetch(apiUrl, {
         method: "POST",
         body: formData,
       })

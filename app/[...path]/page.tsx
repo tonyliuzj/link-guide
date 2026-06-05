@@ -1,5 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
-import { createStat, getDomainByHostname, getLinkByShortCode } from '@/lib/db';
+import { createStat, getDomainByHostname, getLinkByShortCode, getSiteSettings } from '@/lib/db';
 import { headers } from 'next/headers';
 import { TurnstilePage } from '@/components/turnstile-page';
 import { PasswordPage } from '@/components/password-page';
@@ -87,11 +87,13 @@ export default async function Page({ params }: { params: Promise<{ path: string[
   }
 
   if (link.mode === 'password') {
+    const siteSettings = getSiteSettings()
     return (
       <PasswordPage
         linkId={link.id}
         turnstileSiteKey={domain.turnstile_site_key}
         turnstileEnabled={link.turnstile_enabled === 1}
+        siteDomain={siteSettings?.site_domain || ''}
       />
     );
   }

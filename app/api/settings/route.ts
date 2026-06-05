@@ -22,6 +22,11 @@ export async function PUT(req: NextRequest) {
   }
 
   const body = await req.json()
+
+  if (!body.siteDomain || body.siteDomain.trim() === '') {
+    return NextResponse.json({ error: "Site domain is required" }, { status: 400 })
+  }
+
   updateSiteSettings(
     body.siteTitle,
     body.siteDomain,

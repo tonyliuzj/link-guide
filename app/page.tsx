@@ -82,6 +82,7 @@ export default async function Home() {
                   domains={guestDomains}
                   turnstileSiteKey={siteSettings?.turnstile_site_key}
                   turnstileRequired={siteSettings?.turnstile_landing_create === 1}
+                  siteDomain={siteSettings?.site_domain || ''}
                 />
               </CardContent>
             </Card>

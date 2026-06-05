@@ -142,7 +142,14 @@ export default function Page() {
                 </div>
                 <div>
                   <Label htmlFor="siteDomain">Site Domain</Label>
-                  <Input id="siteDomain" name="siteDomain" defaultValue={settings.site_domain || ''} placeholder="example.com" onBlur={handleDomainBlur} />
+                  <Input
+                    id="siteDomain"
+                    name="siteDomain"
+                    defaultValue={settings.site_domain || ''}
+                    placeholder="example.com"
+                    onBlur={handleDomainBlur}
+                    required
+                  />
                 </div>
             </CardContent>
           </Card>
