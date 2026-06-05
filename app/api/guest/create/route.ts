@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getDomainById, createLink, linkExists, isBlacklisted } from "@/lib/db"
+import { getDomainById, createLink, linkExists, isBlacklisted, getSiteSettings } from "@/lib/db"
 import { hash } from "bcryptjs"
 import { buildShortUrl } from "@/lib/domain-utils"
 
@@ -9,6 +9,20 @@ function generateShortCode(): string {
   return Math.random().toString(36).substring(2, 8)
 }
 
+async function verifyTurnstile(token: string, secretKey: string): Promise<boolean> {
+  try {
+    const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ secret: secretKey, response: token })
+    })
+    const data = await response.json()
+    return data.success === true
+  } catch {
+    return false
+  }
+}
+
 export async function POST(req: NextRequest) {
   const formData = await req.formData()
   const domainId = parseInt(formData.get("domain")?.toString() || "0")
@@ -16,6 +30,19 @@ export async function POST(req: NextRequest) {
 
   if (!domain || !domain.allow_guest_create) {
     return NextResponse.json({ error: "Guest link creation not allowed for this domain" }, { status: 403 })
+  }
+
+  // Check if turnstile verification is required
+  const siteSettings = getSiteSettings()
+  if (siteSettings?.turnstile_landing_create === 1 && siteSettings?.turnstile_secret_key) {
+    const turnstileToken = formData.get("cf-turnstile-response")?.toString()
+    if (!turnstileToken) {
+      return NextResponse.json({ error: "Verification required" }, { status: 400 })
+    }
+    const isValid = await verifyTurnstile(turnstileToken, siteSettings.turnstile_secret_key)
+    if (!isValid) {
+      return NextResponse.json({ error: "Verification failed" }, { status: 400 })
+    }
   }
 
   const url = formData.get("url")?.toString()

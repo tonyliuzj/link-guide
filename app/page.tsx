@@ -78,7 +78,11 @@ export default async function Home() {
                 <CardDescription>No account needed - start shortening URLs instantly</CardDescription>
               </CardHeader>
               <CardContent>
-                <GuestLinkForm domains={guestDomains} />
+                <GuestLinkForm
+                  domains={guestDomains}
+                  turnstileSiteKey={siteSettings?.turnstile_site_key}
+                  turnstileRequired={siteSettings?.turnstile_landing_create === 1}
+                />
               </CardContent>
             </Card>
           ) : (

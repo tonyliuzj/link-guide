@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,11 +9,35 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Copy, Check } from "lucide-react"
 
-export function GuestLinkForm({ domains }: { domains: any[] }) {
+export function GuestLinkForm({
+  domains,
+  turnstileSiteKey,
+  turnstileRequired = false
+}: {
+  domains: any[]
+  turnstileSiteKey?: string
+  turnstileRequired?: boolean
+}) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [createdLink, setCreatedLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [mode, setMode] = useState("simple")
+
+  useEffect(() => {
+    if (turnstileSiteKey && turnstileRequired) {
+      const script = document.createElement("script")
+      script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js"
+      script.async = true
+      script.defer = true
+      document.body.appendChild(script)
+
+      return () => {
+        if (document.body.contains(script)) {
+          document.body.removeChild(script)
+        }
+      }
+    }
+  }, [turnstileSiteKey, turnstileRequired])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -248,6 +272,15 @@ export function GuestLinkForm({ domains }: { domains: any[] }) {
             <Label htmlFor="turnstileEnabled" className="cursor-pointer">Enable Turnstile verification</Label>
           </div>
         </>
+      )}
+
+      {turnstileSiteKey && turnstileRequired && (
+        <div className="flex justify-center">
+          <div
+            className="cf-turnstile"
+            data-sitekey={turnstileSiteKey}
+          />
+        </div>
       )}
 
       <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
