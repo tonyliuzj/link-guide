@@ -239,10 +239,12 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                         <Label htmlFor="password">Password</Label>
                         <Input id="password" name="password" type="password" />
                       </div>
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="turnstileEnabled">Enable Turnstile Verification</Label>
-                        <Switch id="turnstileEnabled" checked={turnstileEnabled} onCheckedChange={setTurnstileEnabled} />
-                      </div>
+                      {domain?.turnstile_site_key && (
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="turnstileEnabled">Enable Turnstile Verification</Label>
+                          <Switch id="turnstileEnabled" checked={turnstileEnabled} onCheckedChange={setTurnstileEnabled} />
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 )}
