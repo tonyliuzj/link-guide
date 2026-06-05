@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server"
+import { NextRequest } from "next/server"
 import { getDomainById, createLink, linkExists, isBlacklisted, getSiteSettings } from "@/lib/db"
 import { hash } from "bcryptjs"
 import { buildShortUrl } from "@/lib/domain-utils"
+import { publicApiJson, publicApiOptions } from "@/lib/public-api"
 
 export const runtime = 'nodejs';
 
@@ -23,13 +24,17 @@ async function verifyTurnstile(token: string, secretKey: string): Promise<boolea
   }
 }
 
+export async function OPTIONS() {
+  return publicApiOptions()
+}
+
 export async function POST(req: NextRequest) {
   const formData = await req.formData()
   const domainId = parseInt(formData.get("domain")?.toString() || "0")
   const domain = getDomainById(domainId)
 
   if (!domain || !domain.allow_guest_create) {
-    return NextResponse.json({ error: "Guest link creation not allowed for this domain" }, { status: 403 })
+    return publicApiJson({ error: "Guest link creation not allowed for this domain" }, { status: 403 })
   }
 
   // Check if turnstile verification is required
@@ -37,11 +42,11 @@ export async function POST(req: NextRequest) {
   if (siteSettings?.turnstile_landing_create === 1 && siteSettings?.turnstile_secret_key) {
     const turnstileToken = formData.get("cf-turnstile-response")?.toString()
     if (!turnstileToken) {
-      return NextResponse.json({ error: "Verification required" }, { status: 400 })
+      return publicApiJson({ error: "Verification required" }, { status: 400 })
     }
     const isValid = await verifyTurnstile(turnstileToken, siteSettings.turnstile_secret_key)
     if (!isValid) {
-      return NextResponse.json({ error: "Verification failed" }, { status: 400 })
+      return publicApiJson({ error: "Verification failed" }, { status: 400 })
     }
   }
 
@@ -55,19 +60,19 @@ export async function POST(req: NextRequest) {
   let shortCode = customShortCode || generateShortCode()
 
   if (!url) {
-    return NextResponse.json({ error: "URL is required" }, { status: 400 })
+    return publicApiJson({ error: "URL is required" }, { status: 400 })
   }
 
   if (mode === "password" && !password) {
-    return NextResponse.json({ error: "Password is required for password-protected links" }, { status: 400 })
+    return publicApiJson({ error: "Password is required for password-protected links" }, { status: 400 })
   }
 
   if (isBlacklisted(shortCode)) {
-    return NextResponse.json({ error: "This path is not allowed" }, { status: 400 })
+    return publicApiJson({ error: "This path is not allowed" }, { status: 400 })
   }
 
   if (customShortCode && linkExists(customShortCode, domain.id)) {
-    return NextResponse.json({ error: "Link already taken" }, { status: 400 })
+    return publicApiJson({ error: "Link already taken" }, { status: 400 })
   }
 
   while (linkExists(shortCode, domain.id)) {
@@ -94,5 +99,5 @@ export async function POST(req: NextRequest) {
 
   const shortUrl = buildShortUrl(domain.domain, domain.base_path, shortCode)
 
-  return NextResponse.json({ success: true, shortUrl })
+  return publicApiJson({ success: true, shortUrl })
 }

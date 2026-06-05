@@ -2,17 +2,18 @@
 
 import { useEffect, useState } from "react"
 import { Footer } from "@/components/footer"
+import { getSiteApiUrl } from "@/lib/api-url"
 
 export function PasswordPage({
   linkId,
   turnstileSiteKey,
   turnstileEnabled = false,
-  siteDomain
+  siteDomain,
 }: {
   linkId: number
   turnstileSiteKey?: string
   turnstileEnabled?: boolean
-  siteDomain: string
+  siteDomain?: string
 }) {
   const [error, setError] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -27,11 +28,7 @@ export function PasswordPage({
     const formData = new FormData(e.currentTarget)
 
     try {
-      const apiUrl = siteDomain
-        ? `https://${siteDomain}/api/verify/password/${linkId}`
-        : `/api/verify/password/${linkId}`
-
-      const res = await fetch(apiUrl, {
+      const res = await fetch(getSiteApiUrl(`/api/verify/password/${linkId}`, siteDomain), {
         method: "POST",
         body: formData,
       })

@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Copy, Check } from "lucide-react"
+import { getSiteApiUrl } from "@/lib/api-url"
 
 export function GuestLinkForm({
   domains,
@@ -81,11 +82,7 @@ export function GuestLinkForm({
     formData.set("mode", mode)
 
     try {
-      const apiUrl = siteDomain
-        ? `https://${siteDomain}/api/guest/create`
-        : "/api/guest/create"
-
-      const res = await fetch(apiUrl, {
+      const res = await fetch(getSiteApiUrl("/api/guest/create", siteDomain), {
         method: "POST",
         body: formData,
       })

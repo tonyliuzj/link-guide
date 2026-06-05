@@ -87,7 +87,7 @@ export default async function Page({ params }: { params: Promise<{ path: string[
   }
 
   if (link.mode === 'password') {
-    const siteSettings = getSiteSettings()
+    const siteSettings = getSiteSettings();
     return (
       <PasswordPage
         linkId={link.id}

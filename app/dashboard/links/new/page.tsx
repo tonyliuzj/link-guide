@@ -6,7 +6,6 @@ import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -30,12 +29,6 @@ export default function Page() {
   const selectedDomain = domains.find((d: any) => d.id.toString() === selectedDomainId)
   const hasTurnstile = !!selectedDomain?.turnstile_site_key?.trim()
 
-  useEffect(() => {
-    if (!hasTurnstile && mode === "turnstile") {
-      setMode("simple")
-    }
-  }, [hasTurnstile, mode])
-
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setLoading(true)
@@ -43,12 +36,12 @@ export default function Page() {
 
     const formData = new FormData(e.currentTarget)
     const domainId = parseInt(formData.get("domain") as string)
-    const turnstileEnabled = hasTurnstile && (mode === "turnstile" || formData.get("turnstileEnabled") === "on")
+    const turnstileEnabled = hasTurnstile && formData.get("turnstileEnabled") === "on"
     const data: any = {
       destinationUrl: formData.get("destination"),
       domainId,
       shortCode: formData.get("shortCode") || undefined,
-      mode: mode === "turnstile" ? "simple" : mode,
+      mode,
       statsEnabled: formData.get("stats") === "on",
       redirectDelay: parseInt(formData.get("redirectDelay")?.toString() || "0"),
       allowSkip: formData.get("allowSkip") === "on",
@@ -133,7 +126,6 @@ export default function Page() {
                   <select id="mode" name="mode" className="w-full border rounded p-2" value={mode} onChange={(e) => setMode(e.target.value)}>
                     <option value="simple">Simple Redirect</option>
                     <option value="custom_page">Custom Page</option>
-                    {hasTurnstile && <option value="turnstile">Turnstile Protected</option>}
                     <option value="password">Password Protected</option>
                   </select>
                 </div>
