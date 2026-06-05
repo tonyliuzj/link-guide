@@ -125,6 +125,22 @@ read_env_value() {
   grep "^${key}=" "$file" | tail -n 1 | cut -d'=' -f2-
 }
 
+ensure_env_value() {
+  local key="$1"
+  local value="$2"
+  local file="$3"
+
+  if [ ! -f "$file" ]; then
+    return 0
+  fi
+
+  if grep -q "^${key}=" "$file"; then
+    return 0
+  fi
+
+  printf '\n%s=%s\n' "$key" "$value" >> "$file"
+}
+
 nodesource_source_exists() {
   as_root grep -Rqs "deb.nodesource.com" /etc/apt/sources.list /etc/apt/sources.list.d 2>/dev/null
 }
@@ -555,6 +571,12 @@ HOST_PORT=$HOST_PORT
 EOF
 }
 
+ensure_app_env_defaults() {
+  local env_file="${INSTALL_DIR}/${APP_ENV_FILE}"
+
+  ensure_env_value "AUTH_TRUST_HOST" "true" "$env_file"
+}
+
 # ============================================================
 # systemd functions
 # ============================================================
@@ -652,6 +674,8 @@ update_direct() {
 
   step "Pulling latest code..."
   git pull --ff-only
+
+  ensure_app_env_defaults
 
   install_project_dependencies
 
@@ -767,6 +791,8 @@ update_docker_mode() {
 
   step "Pulling latest code..."
   git pull --ff-only
+
+  ensure_app_env_defaults
 
   step "Rebuilding and restarting Docker services..."
   compose up -d --build

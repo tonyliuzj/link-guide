@@ -4,7 +4,7 @@ import { compare } from "bcryptjs"
 import { getRequestIp, verifyTurnstileToken } from "@/lib/turnstile"
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  trustHost: process.env.AUTH_TRUST_HOST === "true",
+  trustHost: process.env.AUTH_TRUST_HOST !== "false",
   secret: process.env.SESSION_PASSWORD,
   providers: [
     Credentials({

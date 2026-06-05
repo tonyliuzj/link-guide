@@ -55,7 +55,7 @@ Edit `.env.local` and set:
 
 - **SESSION_PASSWORD**: A random secret string for session encryption
   - Generate with: `openssl rand -base64 32`
-- **AUTH_TRUST_HOST**: Set to `true` for reverse proxies, custom domains, and production hosts
+- **AUTH_TRUST_HOST**: Set to `true` for reverse proxies, custom domains, and production hosts. The app defaults Auth.js host trust on unless this is explicitly set to `false`.
 - **DATABASE_URL**: Database file path (default: `./data/linkguide.db`)
 - **PORT**: Server port (default: `3000`)
 
@@ -108,6 +108,16 @@ The installer supports:
 - Docker deployment with Docker Compose
 
 ## Configuration
+
+### Nginx Reverse Proxy
+
+If deploying behind nginx, add these headers to your proxy configuration:
+
+```nginx
+proxy_set_header Host $host;
+proxy_set_header X-Forwarded-Host $host;
+proxy_set_header X-Forwarded-Proto $scheme;
+```
 
 ### Turnstile Bot Protection
 
