@@ -19,14 +19,23 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { domain, basePath } = body;
+  const { domain, basePath, isActive, allowGuestCreate, turnstileSiteKey, turnstileSecretKey, baseResponse, baseRedirectUrl } = body;
 
   if (!domain) {
     return NextResponse.json({ error: 'Missing domain' }, { status: 400 });
   }
 
   try {
-    createDomain(domain, basePath || '/');
+    createDomain(
+      domain,
+      basePath || '/',
+      isActive,
+      allowGuestCreate,
+      turnstileSiteKey,
+      turnstileSecretKey,
+      baseResponse,
+      baseRedirectUrl
+    );
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

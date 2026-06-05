@@ -276,15 +276,32 @@ export function updatePassword(id: number, passwordHash: string) {
 }
 
 // Domains
-export function createDomain(domain: string, basePath: string) {
+export function createDomain(
+  domain: string,
+  basePath: string,
+  isActive: boolean = true,
+  allowGuestCreate: boolean = false,
+  turnstileSiteKey?: string,
+  turnstileSecretKey?: string,
+  baseResponse: string = 'default',
+  baseRedirectUrl?: string
+) {
   const normalizedDomain = normalizeDomain(domain);
   if (!normalizedDomain) {
     throw new Error('Invalid domain');
   }
 
-  return getDb().prepare('INSERT INTO domains (domain, base_path) VALUES (?, ?)').run(
+  return getDb().prepare(
+    'INSERT INTO domains (domain, base_path, is_active, allow_guest_create, turnstile_site_key, turnstile_secret_key, base_response, base_redirect_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  ).run(
     normalizedDomain,
-    normalizeBasePath(basePath)
+    normalizeBasePath(basePath),
+    isActive ? 1 : 0,
+    allowGuestCreate ? 1 : 0,
+    turnstileSiteKey || null,
+    turnstileSecretKey || null,
+    baseResponse,
+    baseRedirectUrl || null
   );
 }
 
