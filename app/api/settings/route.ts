@@ -27,6 +27,11 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Site domain is required" }, { status: 400 })
   }
 
+  const requiresTurnstile = body.turnstileLandingCreate || body.turnstileLogin || body.turnstileSignup
+  if (requiresTurnstile && (!body.turnstileSiteKey || !body.turnstileSecretKey)) {
+    return NextResponse.json({ error: "Turnstile site key and secret key are required before enabling verification" }, { status: 400 })
+  }
+
   updateSiteSettings(
     body.siteTitle,
     body.siteDomain,

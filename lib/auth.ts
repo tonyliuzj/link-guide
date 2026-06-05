@@ -1,22 +1,38 @@
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import { compare } from "bcryptjs"
+import { getRequestIp, verifyTurnstileToken } from "@/lib/turnstile"
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  trustHost: true,
+  trustHost: process.env.AUTH_TRUST_HOST === "true",
   secret: process.env.SESSION_PASSWORD,
   providers: [
     Credentials({
       credentials: {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
+        "cf-turnstile-response": { label: "Turnstile", type: "hidden" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, request) {
         if (!credentials?.email || !credentials?.password) {
           return null
         }
 
-        const { getUserByEmail } = await import('@/lib/db')
+        const { getSiteSettings, getUserByEmail } = await import('@/lib/db')
+        const siteSettings = getSiteSettings()
+
+        if (siteSettings?.turnstile_login === 1) {
+          const isVerified = await verifyTurnstileToken(
+            credentials["cf-turnstile-response"] as string | undefined,
+            siteSettings.turnstile_secret_key,
+            getRequestIp(request.headers)
+          )
+
+          if (!isVerified) {
+            return null
+          }
+        }
+
         const user = getUserByEmail(credentials.email as string)
         if (!user) {
           return null

@@ -6,6 +6,8 @@ import { PasswordPage } from '@/components/password-page';
 import { DelayedRedirectPage } from '@/components/delayed-redirect-page';
 import { CustomPage } from '@/components/custom-page';
 import { getRequestHostname, getShortCodeFromPath } from '@/lib/domain-utils';
+import { normalizeRedirectUrl } from '@/lib/redirect-url';
+import { isLinkExpired } from '@/lib/link-rules';
 
 export const runtime = 'nodejs';
 
@@ -30,6 +32,15 @@ export default async function Page({ params }: { params: Promise<{ path: string[
     notFound();
   }
 
+  if (isLinkExpired(link.expires_at)) {
+    notFound();
+  }
+
+  const destinationUrl = normalizeRedirectUrl(link.destination_url);
+  if (!destinationUrl) {
+    notFound();
+  }
+
   if (link.stats_enabled) {
     const ip = headersList.get('x-forwarded-for') || 'unknown';
     const userAgent = headersList.get('user-agent') || '';
@@ -38,12 +49,17 @@ export default async function Page({ params }: { params: Promise<{ path: string[
   }
 
   if (link.mode === 'simple') {
-    if (link.turnstile_enabled === 1 && domain.turnstile_site_key) {
+    if (link.turnstile_enabled === 1) {
+      if (!domain.turnstile_site_key || !domain.turnstile_secret_key) {
+        return <div className="p-8 text-center">Turnstile not configured for this domain</div>;
+      }
+
+      const siteSettings = getSiteSettings();
       return (
         <TurnstilePage
           siteKey={domain.turnstile_site_key}
-          destinationUrl={link.destination_url}
-          allowSkip={false}
+          linkId={link.id}
+          siteDomain={siteSettings?.site_domain || ''}
           redirectDelay={link.redirect_delay}
           allowSkipDelay={link.allow_skip === 1}
         />
@@ -53,33 +69,40 @@ export default async function Page({ params }: { params: Promise<{ path: string[
     if (link.redirect_delay > 0) {
       return (
         <DelayedRedirectPage
-          destinationUrl={link.destination_url}
+          destinationUrl={destinationUrl}
           delay={link.redirect_delay}
           allowSkip={link.allow_skip === 1}
         />
       );
     }
 
-    redirect(link.destination_url);
+    redirect(destinationUrl);
   }
 
   if (link.mode === 'custom_page') {
     const config = link.custom_page_config ? JSON.parse(link.custom_page_config) : {};
 
+    if (link.turnstile_enabled === 1 && (!domain.turnstile_site_key || !domain.turnstile_secret_key)) {
+      return <div className="p-8 text-center">Turnstile not configured for this domain</div>;
+    }
+
     if (link.redirect_delay > 0 && link.turnstile_enabled !== 1) {
       return (
         <DelayedRedirectPage
-          destinationUrl={link.destination_url}
+          destinationUrl={destinationUrl}
           delay={link.redirect_delay}
           allowSkip={link.allow_skip === 1}
         />
       );
     }
 
+    const siteSettings = getSiteSettings();
     return (
       <CustomPage
         config={config}
-        destinationUrl={link.destination_url}
+        destinationUrl={link.turnstile_enabled === 1 ? undefined : destinationUrl}
+        linkId={link.id}
+        siteDomain={siteSettings?.site_domain || ''}
         turnstileSiteKey={domain.turnstile_site_key}
         turnstileEnabled={link.turnstile_enabled === 1}
       />
@@ -99,11 +122,12 @@ export default async function Page({ params }: { params: Promise<{ path: string[
   }
 
   if (link.mode === 'turnstile') {
-    if (!domain.turnstile_site_key) {
+    if (!domain.turnstile_site_key || !domain.turnstile_secret_key) {
       return <div className="p-8 text-center">Turnstile not configured for this domain</div>;
     }
-    return <TurnstilePage siteKey={domain.turnstile_site_key} destinationUrl={link.destination_url} />;
+    const siteSettings = getSiteSettings();
+    return <TurnstilePage siteKey={domain.turnstile_site_key} linkId={link.id} siteDomain={siteSettings?.site_domain || ''} />;
   }
 
-  redirect(link.destination_url);
+  redirect(destinationUrl);
 }

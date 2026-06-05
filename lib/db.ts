@@ -27,6 +27,7 @@ export function getDb() {
       mkdirSync(dbDir, { recursive: true });
     }
     db = new Database(DB_PATH);
+    db.pragma('foreign_keys = ON');
     db.pragma('journal_mode = WAL');
     initDb();
   }
@@ -284,7 +285,7 @@ export function createDomain(
   turnstileSiteKey?: string,
   turnstileSecretKey?: string,
   baseResponse: string = 'default',
-  baseRedirectUrl?: string
+  baseRedirectUrl?: string | null
 ) {
   const normalizedDomain = normalizeDomain(domain);
   if (!normalizedDomain) {
@@ -327,10 +328,11 @@ export function getDomainById(id: number) {
 }
 
 export function domainExists(domain: string, excludeId?: number) {
+  const normalizedDomain = normalizeDomain(domain);
   const query = excludeId
     ? 'SELECT id FROM domains WHERE domain = ? AND id != ?'
     : 'SELECT id FROM domains WHERE domain = ?';
-  const params = excludeId ? [domain, excludeId] : [domain];
+  const params = excludeId ? [normalizedDomain, excludeId] : [normalizedDomain];
   return !!getDb().prepare(query).get(...params);
 }
 
@@ -342,7 +344,7 @@ export function updateDomain(id: number, data: {
   turnstileSiteKey?: string;
   turnstileSecretKey?: string;
   baseResponse?: string;
-  baseRedirectUrl?: string;
+  baseRedirectUrl?: string | null;
 }) {
   const fields = [];
   const values = [];
@@ -370,7 +372,12 @@ export function updateDomain(id: number, data: {
 }
 
 export function deleteDomain(id: number) {
-  return getDb().prepare('DELETE FROM domains WHERE id = ?').run(id);
+  const database = getDb();
+  return database.transaction((domainId: number) => {
+    database.prepare('DELETE FROM stats WHERE link_id IN (SELECT id FROM links WHERE domain_id = ?)').run(domainId);
+    database.prepare('DELETE FROM links WHERE domain_id = ?').run(domainId);
+    return database.prepare('DELETE FROM domains WHERE id = ?').run(domainId);
+  })(id);
 }
 
 // Links
@@ -386,7 +393,7 @@ export function createLink(data: {
   turnstileEnabled?: boolean;
   redirectDelay?: number;
   allowSkip?: boolean;
-  expiresAt?: string;
+  expiresAt?: string | null;
 }) {
   return getDb().prepare(`
     INSERT INTO links (short_code, destination_url, domain_id, user_id, mode, password_hash, custom_page_config, stats_enabled, turnstile_enabled, redirect_delay, allow_skip, expires_at)
@@ -397,13 +404,13 @@ export function createLink(data: {
     data.domainId,
     data.userId,
     data.mode,
-    data.passwordHash || null,
-    data.customPageConfig || null,
+    data.passwordHash ?? null,
+    data.customPageConfig ?? null,
     data.statsEnabled ? 1 : 0,
     data.turnstileEnabled ? 1 : 0,
     data.redirectDelay ?? 0,
     data.allowSkip === undefined ? 1 : (data.allowSkip ? 1 : 0),
-    data.expiresAt || null
+    data.expiresAt ?? null
   );
 }
 
@@ -443,13 +450,13 @@ export function getAllLinks() {
 export function updateLink(id: number, data: Partial<{
   destinationUrl: string;
   mode: string;
-  passwordHash: string;
-  customPageConfig: string;
+  passwordHash: string | null;
+  customPageConfig: string | null;
   statsEnabled: boolean;
   turnstileEnabled: boolean;
   redirectDelay: number;
   allowSkip: boolean;
-  expiresAt: string;
+  expiresAt: string | null;
 }>) {
   const fields: string[] = [];
   const values: any[] = [];
@@ -463,6 +470,8 @@ export function updateLink(id: number, data: Partial<{
   if (data.redirectDelay !== undefined) { fields.push('redirect_delay = ?'); values.push(data.redirectDelay); }
   if (data.allowSkip !== undefined) { fields.push('allow_skip = ?'); values.push(data.allowSkip ? 1 : 0); }
   if (data.expiresAt !== undefined) { fields.push('expires_at = ?'); values.push(data.expiresAt); }
+
+  if (fields.length === 0) return;
 
   values.push(id);
   return getDb().prepare(`UPDATE links SET ${fields.join(', ')} WHERE id = ?`).run(...values);

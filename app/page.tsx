@@ -8,6 +8,7 @@ import { Footer } from "@/components/footer"
 import Link from "next/link"
 import { headers } from "next/headers"
 import { getRequestHostname, normalizeDomain } from '@/lib/domain-utils';
+import { normalizeRedirectUrl } from '@/lib/redirect-url';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,7 +33,11 @@ export default async function Home() {
       notFound();
     }
     if (baseResponse === 'redirect' && domain.base_redirect_url) {
-      redirect(domain.base_redirect_url);
+      const redirectUrl = normalizeRedirectUrl(domain.base_redirect_url);
+      if (!redirectUrl) {
+        notFound();
+      }
+      redirect(redirectUrl);
     }
     if (baseResponse === 'custom') {
       return (

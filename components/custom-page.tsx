@@ -2,25 +2,56 @@
 
 import { useEffect, useState } from "react"
 import { Footer } from "@/components/footer"
+import { getSiteApiUrl } from "@/lib/api-url"
 
 export function CustomPage({
   config,
   destinationUrl,
+  linkId,
+  siteDomain,
   turnstileSiteKey,
   turnstileEnabled = false
 }: {
   config: { title?: string; description?: string; buttonText?: string }
-  destinationUrl: string
+  destinationUrl?: string
+  linkId?: number
+  siteDomain?: string
   turnstileSiteKey?: string
   turnstileEnabled?: boolean
 }) {
-  const showTurnstile = turnstileSiteKey && turnstileEnabled
-  const [turnstileVerified, setTurnstileVerified] = useState(false)
+  const showTurnstile = Boolean(turnstileSiteKey && turnstileEnabled && linkId)
+  const [redirectUrl, setRedirectUrl] = useState(showTurnstile ? "" : (destinationUrl || ""))
+  const [error, setError] = useState("")
 
   useEffect(() => {
     if (showTurnstile) {
-      (window as any).onTurnstileSuccess = () => {
-        setTurnstileVerified(true)
+      window.onTurnstileSuccess = async (token: string) => {
+        setError("")
+        const formData = new FormData()
+        formData.set("cf-turnstile-response", token)
+
+        try {
+          const res = await fetch(getSiteApiUrl(`/api/verify/turnstile/${linkId}`, siteDomain), {
+            method: "POST",
+            body: formData,
+          })
+
+          if (!res.ok) {
+            const text = await res.text()
+            setError(text || "Verification failed")
+            return
+          }
+
+          const data = await res.json()
+          if (!data.success || !data.redirectUrl) {
+            setError("Verification failed")
+            return
+          }
+
+          setRedirectUrl(data.redirectUrl)
+        } catch {
+          setError("Verification failed")
+        }
       }
 
       const script = document.createElement("script")
@@ -30,15 +61,17 @@ export function CustomPage({
       document.body.appendChild(script)
 
       return () => {
-        delete (window as any).onTurnstileSuccess
-        document.body.removeChild(script)
+        delete window.onTurnstileSuccess
+        if (document.body.contains(script)) {
+          document.body.removeChild(script)
+        }
       }
     }
-  }, [showTurnstile])
+  }, [linkId, showTurnstile, siteDomain])
 
-  function handleClick(e: React.MouseEvent<HTMLAnchorElement>) {
-    if (showTurnstile && !turnstileVerified) {
-      e.preventDefault()
+  function handleClick() {
+    if (redirectUrl) {
+      window.location.href = redirectUrl
     }
   }
 
@@ -57,17 +90,28 @@ export function CustomPage({
               />
             </div>
           )}
-          <a
-            href={destinationUrl}
-            onClick={handleClick}
-            className={`inline-block px-6 py-3 rounded-md ${
-              showTurnstile && !turnstileVerified
-                ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                : 'bg-primary text-primary-foreground hover:bg-primary/90'
-            }`}
-          >
-            {config.buttonText || 'Continue'}
-          </a>
+          {error && <div className="text-sm text-red-500 mb-4">{error}</div>}
+          {showTurnstile ? (
+            <button
+              type="button"
+              onClick={handleClick}
+              disabled={!redirectUrl}
+              className={`inline-block px-6 py-3 rounded-md ${
+                !redirectUrl
+                  ? 'bg-muted text-muted-foreground cursor-not-allowed'
+                  : 'bg-primary text-primary-foreground hover:bg-primary/90'
+              }`}
+            >
+              {config.buttonText || 'Continue'}
+            </button>
+          ) : (
+            <a
+              href={destinationUrl}
+              className="inline-block px-6 py-3 rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              {config.buttonText || 'Continue'}
+            </a>
+          )}
         </div>
       </div>
       <Footer />

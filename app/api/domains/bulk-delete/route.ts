@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { deleteDomain } from "@/lib/db"
+import { deleteDomain, getDomainById, getSiteSettings } from "@/lib/db"
+import { normalizeDomain } from "@/lib/domain-utils"
 
 export const runtime = 'nodejs';
 
@@ -16,7 +17,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 })
   }
 
+  const siteDomain = normalizeDomain(getSiteSettings()?.site_domain || "")
+
   for (const id of ids) {
+    const domain = getDomainById(id)
+    if (!domain) continue
+    if (siteDomain && normalizeDomain(domain.domain) === siteDomain) continue
+
     deleteDomain(id)
   }
 

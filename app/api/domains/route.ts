@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { getAllDomains, createDomain } from '@/lib/db';
+import { getAllDomains, createDomain, domainExists } from '@/lib/db';
+import { normalizeRedirectUrl } from '@/lib/redirect-url';
 
 export async function GET() {
   const session = await auth();
@@ -25,6 +26,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing domain' }, { status: 400 });
   }
 
+  if (domainExists(domain)) {
+    return NextResponse.json({ error: 'Domain already exists' }, { status: 400 });
+  }
+
+  let normalizedBaseRedirectUrl: string | null = null;
+  if (baseResponse === 'redirect') {
+    normalizedBaseRedirectUrl = normalizeRedirectUrl(baseRedirectUrl);
+    if (!normalizedBaseRedirectUrl) {
+      return NextResponse.json({ error: 'Redirect URL must be an absolute http or https URL' }, { status: 400 });
+    }
+  }
+
   try {
     createDomain(
       domain,
@@ -34,7 +47,7 @@ export async function POST(request: Request) {
       turnstileSiteKey,
       turnstileSecretKey,
       baseResponse,
-      baseRedirectUrl
+      normalizedBaseRedirectUrl
     );
     return NextResponse.json({ success: true });
   } catch (error: any) {

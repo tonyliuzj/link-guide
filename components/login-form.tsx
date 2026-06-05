@@ -20,13 +20,21 @@ import { useState } from "react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { TurnstileWidget } from "@/components/turnstile-widget"
 
 export function LoginForm({
+  turnstileSiteKey,
+  turnstileRequired = false,
   className,
   ...props
-}: React.ComponentProps<"div">) {
+}: React.ComponentProps<"div"> & {
+  turnstileSiteKey?: string
+  turnstileRequired?: boolean
+}) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [turnstileToken, setTurnstileToken] = useState("")
+  const [turnstileKey, setTurnstileKey] = useState(0)
   const router = useRouter()
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -35,14 +43,24 @@ export function LoginForm({
     setError("")
 
     const formData = new FormData(e.currentTarget)
+
+    if (turnstileRequired && (!turnstileSiteKey || !turnstileToken)) {
+      setError("Verification is required")
+      setLoading(false)
+      return
+    }
+
     const result = await signIn("credentials", {
       email: formData.get("email"),
       password: formData.get("password"),
+      "cf-turnstile-response": turnstileToken,
       redirect: false,
     })
 
     if (result?.error) {
       setError("Invalid email or password")
+      setTurnstileToken("")
+      setTurnstileKey((key) => key + 1)
       setLoading(false)
     } else {
       router.push("/dashboard")
@@ -75,9 +93,16 @@ export function LoginForm({
                 <FieldLabel htmlFor="password">Password</FieldLabel>
                 <Input id="password" name="password" type="password" required />
               </Field>
+              {turnstileRequired && turnstileSiteKey && (
+                <TurnstileWidget
+                  key={turnstileKey}
+                  siteKey={turnstileSiteKey}
+                  onToken={setTurnstileToken}
+                />
+              )}
               {error && <div className="text-sm text-red-500">{error}</div>}
               <Field>
-                <Button type="submit" disabled={loading}>
+                <Button type="submit" disabled={loading || (turnstileRequired && !turnstileToken)}>
                   {loading ? "Logging in..." : "Login"}
                 </Button>
                 <FieldDescription className="text-center">

@@ -62,8 +62,12 @@ export function getHostnameCandidates(value: unknown) {
 }
 
 export function getRequestHostname(headersList: { get(name: string): string | null }) {
-  const forwardedHost = headersList.get('x-forwarded-host')?.split(',')[0]?.trim();
-  return forwardedHost || headersList.get('host') || '';
+  if (process.env.AUTH_TRUST_HOST === 'true') {
+    const forwardedHost = headersList.get('x-forwarded-host')?.split(',')[0]?.trim();
+    if (forwardedHost) return forwardedHost;
+  }
+
+  return headersList.get('host') || '';
 }
 
 export function getShortCodeFromPath(segments: string[], basePathValue: unknown) {

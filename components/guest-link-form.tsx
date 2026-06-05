@@ -31,8 +31,8 @@ export function GuestLinkForm({
 
   useEffect(() => {
     if (turnstileSiteKey && turnstileRequired) {
-      if ((window as any).turnstile) {
-        setTurnstileLoaded(true)
+      if (window.turnstile) {
+        queueMicrotask(() => setTurnstileLoaded(true))
         return
       }
 
@@ -56,17 +56,17 @@ export function GuestLinkForm({
   }, [turnstileSiteKey, turnstileRequired])
 
   useEffect(() => {
-    if (turnstileLoaded && turnstileRef.current && !createdLink && widgetIdRef.current === null) {
-      widgetIdRef.current = (window as any).turnstile.render(turnstileRef.current, {
+    if (turnstileLoaded && turnstileSiteKey && turnstileRef.current && !createdLink && widgetIdRef.current === null) {
+      widgetIdRef.current = window.turnstile?.render(turnstileRef.current, {
         sitekey: turnstileSiteKey
-      })
+      }) || null
     }
   }, [turnstileLoaded, createdLink, turnstileSiteKey])
 
   function resetTurnstile() {
-    if ((window as any).turnstile && widgetIdRef.current) {
+    if (window.turnstile && widgetIdRef.current) {
       try {
-        (window as any).turnstile.reset(widgetIdRef.current)
+        window.turnstile.reset(widgetIdRef.current)
       } catch (e) {
         console.error('Failed to reset turnstile:', e)
       }
@@ -114,9 +114,9 @@ export function GuestLinkForm({
   }
 
   function createAnother() {
-    if ((window as any).turnstile && widgetIdRef.current) {
+    if (window.turnstile && widgetIdRef.current) {
       try {
-        (window as any).turnstile.remove(widgetIdRef.current)
+        window.turnstile.remove(widgetIdRef.current)
       } catch (e) {
         console.error('Failed to remove turnstile:', e)
       }

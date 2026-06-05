@@ -69,8 +69,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
     if (mode === "password") {
       const password = formData.get("password")?.toString()
       if (password) {
-        const bcrypt = await import("bcryptjs")
-        body.passwordHash = await bcrypt.hash(password, 10)
+        body.password = password
       }
     }
 

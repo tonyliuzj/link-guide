@@ -1,13 +1,27 @@
 import { NextResponse } from 'next/server';
 import { hash } from 'bcryptjs';
-import { createUser } from '@/lib/db';
+import { createUser, getSiteSettings } from '@/lib/db';
+import { getRequestIp, verifyTurnstileToken } from '@/lib/turnstile';
 
 export async function POST(request: Request) {
   const body = await request.json();
-  const { email, password } = body;
+  const { email, password, turnstileToken } = body;
 
   if (!email || !password) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  }
+
+  const siteSettings = getSiteSettings();
+  if (siteSettings?.turnstile_signup === 1) {
+    const isVerified = await verifyTurnstileToken(
+      turnstileToken,
+      siteSettings.turnstile_secret_key,
+      getRequestIp(request.headers)
+    );
+
+    if (!isVerified) {
+      return NextResponse.json({ error: 'Verification failed' }, { status: 400 });
+    }
   }
 
   if (password.length < 8) {

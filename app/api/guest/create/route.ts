@@ -3,25 +3,14 @@ import { getDomainById, createLink, linkExists, isBlacklisted, getSiteSettings }
 import { hash } from "bcryptjs"
 import { buildShortUrl } from "@/lib/domain-utils"
 import { publicApiJson, publicApiOptions } from "@/lib/public-api"
+import { normalizeRedirectUrl } from "@/lib/redirect-url"
+import { normalizeLinkMode, normalizeRedirectDelay, normalizeShortCode } from "@/lib/link-rules"
+import { getRequestIp, verifyTurnstileToken } from "@/lib/turnstile"
 
 export const runtime = 'nodejs';
 
 function generateShortCode(): string {
   return Math.random().toString(36).substring(2, 8)
-}
-
-async function verifyTurnstile(token: string, secretKey: string): Promise<boolean> {
-  try {
-    const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ secret: secretKey, response: token })
-    })
-    const data = await response.json()
-    return data.success === true
-  } catch {
-    return false
-  }
 }
 
 export async function OPTIONS() {
@@ -39,12 +28,13 @@ export async function POST(req: NextRequest) {
 
   // Check if turnstile verification is required
   const siteSettings = getSiteSettings()
-  if (siteSettings?.turnstile_landing_create === 1 && siteSettings?.turnstile_secret_key) {
-    const turnstileToken = formData.get("cf-turnstile-response")?.toString()
-    if (!turnstileToken) {
-      return publicApiJson({ error: "Verification required" }, { status: 400 })
+  if (siteSettings?.turnstile_landing_create === 1) {
+    if (!siteSettings.turnstile_secret_key) {
+      return publicApiJson({ error: "Verification is not configured" }, { status: 400 })
     }
-    const isValid = await verifyTurnstile(turnstileToken, siteSettings.turnstile_secret_key)
+
+    const turnstileToken = formData.get("cf-turnstile-response")?.toString()
+    const isValid = await verifyTurnstileToken(turnstileToken, siteSettings.turnstile_secret_key, getRequestIp(req.headers))
     if (!isValid) {
       return publicApiJson({ error: "Verification failed" }, { status: 400 })
     }
@@ -52,36 +42,59 @@ export async function POST(req: NextRequest) {
 
   const url = formData.get("url")?.toString()
   const customShortCode = formData.get("shortCode")?.toString()
-  const mode = formData.get("mode")?.toString() || "simple"
+  const mode = normalizeLinkMode(formData.get("mode")?.toString() || "simple")
   const password = formData.get("password")?.toString()
-  const redirectDelay = parseInt(formData.get("redirectDelay")?.toString() || "0")
+  const redirectDelay = normalizeRedirectDelay(formData.get("redirectDelay")?.toString() || "0")
   const allowSkip = formData.get("allowSkip") === "on"
   const turnstileEnabled = formData.get("turnstileEnabled") === "on"
-  let shortCode = customShortCode || generateShortCode()
+
+  if (!mode) {
+    return publicApiJson({ error: "Invalid redirect mode" }, { status: 400 })
+  }
+
+  if (redirectDelay === null) {
+    return publicApiJson({ error: "Redirect delay must be a whole number between 0 and 86400 seconds" }, { status: 400 })
+  }
+
+  const normalizedCustomShortCode = customShortCode ? normalizeShortCode(customShortCode) : null
+  if (customShortCode && !normalizedCustomShortCode) {
+    return publicApiJson({ error: "Short code can only contain letters, numbers, hyphens, and underscores" }, { status: 400 })
+  }
+
+  let shortCode = normalizedCustomShortCode || generateShortCode()
 
   if (!url) {
     return publicApiJson({ error: "URL is required" }, { status: 400 })
+  }
+
+  const destinationUrl = normalizeRedirectUrl(url)
+  if (!destinationUrl) {
+    return publicApiJson({ error: "URL must be an absolute http or https URL" }, { status: 400 })
   }
 
   if (mode === "password" && !password) {
     return publicApiJson({ error: "Password is required for password-protected links" }, { status: 400 })
   }
 
+  if (turnstileEnabled && (!domain.turnstile_site_key || !domain.turnstile_secret_key)) {
+    return publicApiJson({ error: "Turnstile is not configured for this domain" }, { status: 400 })
+  }
+
   if (isBlacklisted(shortCode)) {
     return publicApiJson({ error: "This path is not allowed" }, { status: 400 })
   }
 
-  if (customShortCode && linkExists(customShortCode, domain.id)) {
+  if (normalizedCustomShortCode && linkExists(normalizedCustomShortCode, domain.id)) {
     return publicApiJson({ error: "Link already taken" }, { status: 400 })
   }
 
-  while (linkExists(shortCode, domain.id)) {
+  while (linkExists(shortCode, domain.id) || isBlacklisted(shortCode)) {
     shortCode = generateShortCode()
   }
 
   const linkData: any = {
     shortCode,
-    destinationUrl: url,
+    destinationUrl,
     domainId: domain.id,
     userId: 0,
     mode,

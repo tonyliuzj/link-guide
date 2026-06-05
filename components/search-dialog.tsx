@@ -33,7 +33,7 @@ export function SearchDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           </div>
           {query && (
             <div className="text-sm text-muted-foreground">
-              No results found for "{query}"
+              No results found for &ldquo;{query}&rdquo;
             </div>
           )}
         </div>

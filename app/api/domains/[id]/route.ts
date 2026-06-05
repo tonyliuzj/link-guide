@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { getDomainById, updateDomain, deleteDomain } from "@/lib/db"
+import { getDomainById, updateDomain, deleteDomain, domainExists, getSiteSettings } from "@/lib/db"
+import { normalizeRedirectUrl } from "@/lib/redirect-url"
+import { normalizeDomain } from "@/lib/domain-utils"
 
 export const runtime = 'nodejs';
 
@@ -33,7 +35,26 @@ export async function PUT(
   }
 
   const { id } = await params
+  const domain = getDomainById(parseInt(id))
+  if (!domain) {
+    return NextResponse.json({ error: "Domain not found" }, { status: 404 })
+  }
+
   const body = await req.json()
+  if (body.domain && domainExists(body.domain, parseInt(id))) {
+    return NextResponse.json({ error: "Domain already exists" }, { status: 400 })
+  }
+
+  let baseRedirectUrl: string | null | undefined
+  if (body.baseResponse === "redirect") {
+    const normalizedBaseRedirectUrl = normalizeRedirectUrl(body.baseRedirectUrl)
+    if (!normalizedBaseRedirectUrl) {
+      return NextResponse.json({ error: "Redirect URL must be an absolute http or https URL" }, { status: 400 })
+    }
+    baseRedirectUrl = normalizedBaseRedirectUrl
+  } else if (body.baseRedirectUrl !== undefined) {
+    baseRedirectUrl = null
+  }
 
   try {
     updateDomain(parseInt(id), {
@@ -44,7 +65,7 @@ export async function PUT(
       turnstileSiteKey: body.turnstileSiteKey,
       turnstileSecretKey: body.turnstileSecretKey,
       baseResponse: body.baseResponse,
-      baseRedirectUrl: body.baseRedirectUrl,
+      baseRedirectUrl,
     })
 
     return NextResponse.json({ success: true })
@@ -66,6 +87,16 @@ export async function DELETE(
   }
 
   const { id } = await params
+  const domain = getDomainById(parseInt(id))
+  if (!domain) {
+    return NextResponse.json({ error: "Domain not found" }, { status: 404 })
+  }
+
+  const siteDomain = getSiteSettings()?.site_domain
+  if (siteDomain && normalizeDomain(siteDomain) === normalizeDomain(domain.domain)) {
+    return NextResponse.json({ error: "Cannot delete the configured site domain" }, { status: 400 })
+  }
+
   deleteDomain(parseInt(id))
 
   return NextResponse.json({ success: true })
