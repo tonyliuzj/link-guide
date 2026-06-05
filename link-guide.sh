@@ -38,6 +38,20 @@ DEFAULT_ADMIN_PASSWORD="${DEFAULT_ADMIN_PASSWORD:-changeme}"
 # Set STEP_DELAY=0 to disable.
 STEP_DELAY="${STEP_DELAY:-1}"
 
+# Upgrade installed apt packages before installing dependencies.
+# Set SYSTEM_UPGRADE=0 to skip.
+SYSTEM_UPGRADE="${SYSTEM_UPGRADE:-1}"
+
+# Check installed system/project packages after install steps.
+# Set CHECK_INSTALLS_UP_TO_DATE=0 to skip.
+CHECK_INSTALLS_UP_TO_DATE="${CHECK_INSTALLS_UP_TO_DATE:-1}"
+
+# If npm's lockfile is out of sync, refresh lockfile metadata before npm ci.
+# Set REFRESH_NPM_LOCKFILE=0 to fail instead.
+REFRESH_NPM_LOCKFILE="${REFRESH_NPM_LOCKFILE:-1}"
+
+SYSTEM_UPGRADE_DONE=0
+
 # ============================================================
 # Helper functions
 # ============================================================
@@ -134,6 +148,65 @@ apt_update() {
   refresh_nodesource_key_if_possible
   step "Updating apt package lists..."
   as_root apt update
+}
+
+upgrade_system_packages() {
+  if [ "$SYSTEM_UPGRADE_DONE" = "1" ]; then
+    return 0
+  fi
+
+  if [ "$SYSTEM_UPGRADE" != "1" ]; then
+    echo "Skipping system package upgrade because SYSTEM_UPGRADE=$SYSTEM_UPGRADE."
+    return 0
+  fi
+
+  apt_update
+
+  step "Upgrading installed system packages..."
+  as_root env DEBIAN_FRONTEND=noninteractive apt upgrade -y
+
+  SYSTEM_UPGRADE_DONE=1
+}
+
+check_system_packages_up_to_date() {
+  local upgradable
+
+  if [ "$CHECK_INSTALLS_UP_TO_DATE" != "1" ]; then
+    return 0
+  fi
+
+  step "Checking system packages are up to date..."
+  apt_update
+
+  upgradable="$(apt list --upgradable 2>/dev/null | sed '/^Listing/d' || true)"
+
+  if [ -n "$upgradable" ]; then
+    echo "Some system packages still have updates available:"
+    echo "$upgradable"
+    echo "Review them with: sudo apt list --upgradable"
+  else
+    echo "System packages are up to date."
+  fi
+}
+
+check_required_commands() {
+  local command_name
+  local missing=0
+
+  step "Checking required commands are installed..."
+
+  for command_name in "$@"; do
+    if command_exists "$command_name"; then
+      echo "OK: $command_name"
+    else
+      echo "Missing required command: $command_name"
+      missing=1
+    fi
+  done
+
+  if [ "$missing" -ne 0 ]; then
+    exit 1
+  fi
 }
 
 # ============================================================
@@ -250,7 +323,7 @@ ensure_nodejs() {
 install_direct_dependencies() {
   step "Installing system dependencies for direct deployment..."
 
-  apt_update
+  upgrade_system_packages
 
   as_root apt install -y \
     git \
@@ -262,12 +335,14 @@ install_direct_dependencies() {
     openssl
 
   ensure_nodejs
+  check_required_commands git curl gpg openssl python3 node npm
+  check_system_packages_up_to_date
 }
 
 install_docker_dependencies() {
   step "Installing system dependencies for Docker deployment..."
 
-  apt_update
+  upgrade_system_packages
 
   as_root apt install -y \
     git \
@@ -288,24 +363,39 @@ install_docker_dependencies() {
 
   step "Enabling and starting Docker..."
   as_root systemctl enable --now docker
+
+  check_required_commands git curl gpg openssl docker
+  check_docker_compose_command
+  check_system_packages_up_to_date
 }
 
 ensure_docker_available() {
-  if ! command_exists docker; then
-    echo "Docker is not installed. Run Docker install first."
-    exit 1
-  fi
-
-  if ! docker compose version >/dev/null 2>&1 && ! command_exists docker-compose; then
-    echo "Docker Compose is not installed. Run Docker install first."
-    exit 1
-  fi
+  check_required_commands docker
+  check_docker_compose_command
 
   as_root systemctl enable --now docker
 }
 
+check_docker_compose_command() {
+  step "Checking Docker Compose is installed..."
+
+  if docker compose version >/dev/null 2>&1; then
+    echo "OK: docker compose"
+    return 0
+  fi
+
+  if command_exists docker-compose; then
+    echo "OK: docker-compose"
+    return 0
+  fi
+
+  echo "Docker Compose is not installed. Run Docker install first."
+  exit 1
+}
+
 compose() {
   require_repo_checkout
+  require_compose_file
 
   if docker compose version >/dev/null 2>&1; then
     (
@@ -325,6 +415,84 @@ compose() {
 
   echo "Docker Compose is required but was not found."
   exit 1
+}
+
+require_compose_file() {
+  if [ ! -f "${INSTALL_DIR}/${COMPOSE_FILE}" ]; then
+    echo "Docker Compose file not found: ${INSTALL_DIR}/${COMPOSE_FILE}"
+    exit 1
+  fi
+}
+
+# ============================================================
+# Project dependency functions
+# ============================================================
+
+check_npm_lockfile_sync() {
+  local npm_check_log
+
+  npm_check_log="$(mktemp)"
+
+  if npm ci --dry-run >"$npm_check_log" 2>&1; then
+    rm -f "$npm_check_log"
+    echo "npm lockfile is in sync."
+    return 0
+  fi
+
+  echo "npm lockfile is not in sync:"
+  cat "$npm_check_log"
+  rm -f "$npm_check_log"
+  return 1
+}
+
+check_project_dependencies_up_to_date() {
+  local outdated_log
+
+  if [ "$CHECK_INSTALLS_UP_TO_DATE" != "1" ]; then
+    return 0
+  fi
+
+  step "Checking project dependencies are installed..."
+  npm ls --depth=0 >/dev/null
+
+  outdated_log="$(mktemp)"
+
+  if npm outdated --depth=0 >"$outdated_log" 2>&1; then
+    rm -f "$outdated_log"
+    echo "Project dependencies are installed and up to date within package.json ranges."
+    return 0
+  fi
+
+  if [ -s "$outdated_log" ]; then
+    echo "Project dependencies are installed. Newer package versions are available:"
+    cat "$outdated_log"
+    rm -f "$outdated_log"
+    return 0
+  fi
+
+  cat "$outdated_log"
+  rm -f "$outdated_log"
+  return 1
+}
+
+install_project_dependencies() {
+  step "Checking npm lockfile before install..."
+
+  if ! check_npm_lockfile_sync; then
+    if [ "$REFRESH_NPM_LOCKFILE" != "1" ]; then
+      echo "Set REFRESH_NPM_LOCKFILE=1 to refresh npm lockfile metadata automatically."
+      exit 1
+    fi
+
+    step "Refreshing npm lockfile metadata..."
+    npm install --package-lock-only
+    check_npm_lockfile_sync
+  fi
+
+  step "Installing project dependencies..."
+  npm ci
+
+  check_project_dependencies_up_to_date
 }
 
 # ============================================================
@@ -452,8 +620,7 @@ install_direct() {
   echo ".env file created: ${INSTALL_DIR}/${APP_ENV_FILE}"
   echo "Complete setup at: http://localhost:$HOST_PORT/setup"
 
-  step "Installing project dependencies..."
-  npm ci
+  install_project_dependencies
 
   step "Building the app..."
   npm run build
@@ -480,8 +647,7 @@ update_direct() {
   step "Pulling latest code..."
   git pull --ff-only
 
-  step "Installing project dependencies..."
-  npm ci
+  install_project_dependencies
 
   step "Building the app..."
   npm run build
