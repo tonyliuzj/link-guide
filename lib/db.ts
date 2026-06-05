@@ -35,6 +35,7 @@ export function getDb() {
 
 function initDb() {
   migrateSetupTableToSettings();
+  migrateAddSecurityFields();
 
   const schema = readFileSync(join(process.cwd(), 'lib', 'schema.sql'), 'utf-8');
   db!.exec(schema);
@@ -140,6 +141,24 @@ function migrateSetupTableToSettings() {
   }
 }
 
+function migrateAddSecurityFields() {
+  if (!tableExists('settings')) return;
+
+  const fieldsToAdd = [
+    { name: 'turnstile_site_key', type: 'TEXT' },
+    { name: 'turnstile_secret_key', type: 'TEXT' },
+    { name: 'turnstile_landing_create', type: 'INTEGER NOT NULL DEFAULT 0' },
+    { name: 'turnstile_login', type: 'INTEGER NOT NULL DEFAULT 0' },
+    { name: 'turnstile_signup', type: 'INTEGER NOT NULL DEFAULT 0' }
+  ];
+
+  for (const field of fieldsToAdd) {
+    if (!columnExists('settings', field.name)) {
+      db!.exec(`ALTER TABLE settings ADD COLUMN ${field.name} ${field.type}`);
+    }
+  }
+}
+
 function migrateSetupRowToSettings() {
   if (!tableExists('setup') || !tableExists('settings')) return;
 
@@ -180,11 +199,37 @@ export function completeSetup() {
 }
 
 export function getSiteSettings() {
-  return getDb().prepare('SELECT site_title, site_domain FROM settings WHERE id = 1').get() as { site_title: string; site_domain: string } | undefined;
+  return getDb().prepare('SELECT site_title, site_domain, turnstile_site_key, turnstile_secret_key, turnstile_landing_create, turnstile_login, turnstile_signup FROM settings WHERE id = 1').get() as {
+    site_title: string;
+    site_domain: string;
+    turnstile_site_key?: string;
+    turnstile_secret_key?: string;
+    turnstile_landing_create: number;
+    turnstile_login: number;
+    turnstile_signup: number;
+  } | undefined;
 }
 
-export function updateSiteSettings(siteTitle: string, siteDomain: string) {
-  return getDb().prepare('UPDATE settings SET site_title = ?, site_domain = ? WHERE id = 1').run(siteTitle, normalizeDomain(siteDomain));
+export function updateSiteSettings(
+  siteTitle: string,
+  siteDomain: string,
+  turnstileSiteKey?: string,
+  turnstileSecretKey?: string,
+  turnstileLandingCreate?: boolean,
+  turnstileLogin?: boolean,
+  turnstileSignup?: boolean
+) {
+  return getDb().prepare(
+    'UPDATE settings SET site_title = ?, site_domain = ?, turnstile_site_key = ?, turnstile_secret_key = ?, turnstile_landing_create = ?, turnstile_login = ?, turnstile_signup = ? WHERE id = 1'
+  ).run(
+    siteTitle,
+    normalizeDomain(siteDomain),
+    turnstileSiteKey || null,
+    turnstileSecretKey || null,
+    turnstileLandingCreate ? 1 : 0,
+    turnstileLogin ? 1 : 0,
+    turnstileSignup ? 1 : 0
+  );
 }
 
 // Users

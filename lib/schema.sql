@@ -3,7 +3,12 @@ CREATE TABLE IF NOT EXISTS settings (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   is_completed INTEGER NOT NULL DEFAULT 0,
   site_title TEXT DEFAULT 'LinkGuide',
-  site_domain TEXT
+  site_domain TEXT,
+  turnstile_site_key TEXT,
+  turnstile_secret_key TEXT,
+  turnstile_landing_create INTEGER NOT NULL DEFAULT 0,
+  turnstile_login INTEGER NOT NULL DEFAULT 0,
+  turnstile_signup INTEGER NOT NULL DEFAULT 0
 );
 
 -- Users table

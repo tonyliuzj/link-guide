@@ -22,7 +22,15 @@ export async function PUT(req: NextRequest) {
   }
 
   const body = await req.json()
-  updateSiteSettings(body.siteTitle, body.siteDomain)
+  updateSiteSettings(
+    body.siteTitle,
+    body.siteDomain,
+    body.turnstileSiteKey,
+    body.turnstileSecretKey,
+    body.turnstileLandingCreate,
+    body.turnstileLogin,
+    body.turnstileSignup
+  )
 
   return NextResponse.json({ success: true })
 }
