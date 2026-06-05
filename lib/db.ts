@@ -321,11 +321,14 @@ export function createLink(data: {
   passwordHash?: string;
   customPageConfig?: string;
   statsEnabled: boolean;
+  turnstileEnabled?: boolean;
+  redirectDelay?: number;
+  allowSkip?: boolean;
   expiresAt?: string;
 }) {
   return getDb().prepare(`
-    INSERT INTO links (short_code, destination_url, domain_id, user_id, mode, password_hash, custom_page_config, stats_enabled, expires_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO links (short_code, destination_url, domain_id, user_id, mode, password_hash, custom_page_config, stats_enabled, turnstile_enabled, redirect_delay, allow_skip, expires_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     data.shortCode,
     data.destinationUrl,
@@ -335,6 +338,9 @@ export function createLink(data: {
     data.passwordHash || null,
     data.customPageConfig || null,
     data.statsEnabled ? 1 : 0,
+    data.turnstileEnabled ? 1 : 0,
+    data.redirectDelay ?? 0,
+    data.allowSkip === undefined ? 1 : (data.allowSkip ? 1 : 0),
     data.expiresAt || null
   );
 }

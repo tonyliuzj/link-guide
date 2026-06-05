@@ -14,14 +14,27 @@ import { toast } from "sonner"
 
 export default function Page() {
   const [domains, setDomains] = useState<any[]>([])
+  const [selectedDomainId, setSelectedDomainId] = useState("")
   const [mode, setMode] = useState("simple")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
 
   useEffect(() => {
-    fetch("/api/domains").then(r => r.json()).then(setDomains)
+    fetch("/api/domains").then(r => r.json()).then((data) => {
+      setDomains(data)
+      setSelectedDomainId(data[0]?.id?.toString() || "")
+    })
   }, [])
+
+  const selectedDomain = domains.find((d: any) => d.id.toString() === selectedDomainId)
+  const hasTurnstile = !!selectedDomain?.turnstile_site_key?.trim()
+
+  useEffect(() => {
+    if (!hasTurnstile && mode === "turnstile") {
+      setMode("simple")
+    }
+  }, [hasTurnstile, mode])
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -29,15 +42,17 @@ export default function Page() {
     setError("")
 
     const formData = new FormData(e.currentTarget)
+    const domainId = parseInt(formData.get("domain") as string)
+    const turnstileEnabled = hasTurnstile && (mode === "turnstile" || formData.get("turnstileEnabled") === "on")
     const data: any = {
       destinationUrl: formData.get("destination"),
-      domainId: parseInt(formData.get("domain") as string),
+      domainId,
       shortCode: formData.get("shortCode") || undefined,
-      mode,
+      mode: mode === "turnstile" ? "simple" : mode,
       statsEnabled: formData.get("stats") === "on",
       redirectDelay: parseInt(formData.get("redirectDelay")?.toString() || "0"),
       allowSkip: formData.get("allowSkip") === "on",
-      turnstileEnabled: formData.get("turnstileEnabled") === "on",
+      turnstileEnabled,
     }
 
     if (mode === "password") {
@@ -96,7 +111,14 @@ export default function Page() {
                 </div>
                 <div>
                   <Label htmlFor="domain">Domain</Label>
-                  <select id="domain" name="domain" className="w-full border rounded p-2" required>
+                  <select
+                    id="domain"
+                    name="domain"
+                    className="w-full border rounded p-2"
+                    value={selectedDomainId}
+                    onChange={(e) => setSelectedDomainId(e.target.value)}
+                    required
+                  >
                     {domains.map((d: any) => (
                       <option key={d.id} value={d.id}>{d.domain}{d.base_path}</option>
                     ))}
@@ -111,7 +133,7 @@ export default function Page() {
                   <select id="mode" name="mode" className="w-full border rounded p-2" value={mode} onChange={(e) => setMode(e.target.value)}>
                     <option value="simple">Simple Redirect</option>
                     <option value="custom_page">Custom Page</option>
-                    <option value="turnstile">Turnstile Protected</option>
+                    {hasTurnstile && <option value="turnstile">Turnstile Protected</option>}
                     <option value="password">Password Protected</option>
                   </select>
                 </div>
@@ -125,10 +147,12 @@ export default function Page() {
                       <input id="allowSkip" name="allowSkip" type="checkbox" defaultChecked />
                       <Label htmlFor="allowSkip">Allow skip redirect</Label>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <input id="turnstileEnabled" name="turnstileEnabled" type="checkbox" />
-                      <Label htmlFor="turnstileEnabled">Enable Turnstile verification</Label>
-                    </div>
+                    {hasTurnstile && (
+                      <div className="flex items-center gap-2">
+                        <input id="turnstileEnabled" name="turnstileEnabled" type="checkbox" />
+                        <Label htmlFor="turnstileEnabled">Enable Turnstile verification</Label>
+                      </div>
+                    )}
                   </>
                 )}
                 {mode === "password" && (
@@ -145,10 +169,12 @@ export default function Page() {
                       <input id="allowSkip" name="allowSkip" type="checkbox" defaultChecked />
                       <Label htmlFor="allowSkip">Allow skip redirect</Label>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <input id="turnstileEnabled" name="turnstileEnabled" type="checkbox" />
-                      <Label htmlFor="turnstileEnabled">Enable Turnstile verification</Label>
-                    </div>
+                    {hasTurnstile && (
+                      <div className="flex items-center gap-2">
+                        <input id="turnstileEnabled" name="turnstileEnabled" type="checkbox" />
+                        <Label htmlFor="turnstileEnabled">Enable Turnstile verification</Label>
+                      </div>
+                    )}
                   </>
                 )}
                 {mode === "custom_page" && (
@@ -173,10 +199,12 @@ export default function Page() {
                       <input id="allowSkip" name="allowSkip" type="checkbox" defaultChecked />
                       <Label htmlFor="allowSkip">Allow skip redirect</Label>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <input id="turnstileEnabled" name="turnstileEnabled" type="checkbox" />
-                      <Label htmlFor="turnstileEnabled">Enable Turnstile verification</Label>
-                    </div>
+                    {hasTurnstile && (
+                      <div className="flex items-center gap-2">
+                        <input id="turnstileEnabled" name="turnstileEnabled" type="checkbox" />
+                        <Label htmlFor="turnstileEnabled">Enable Turnstile verification</Label>
+                      </div>
+                    )}
                   </>
                 )}
                 <div className="flex items-center gap-2">

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { createLink, getLinksByUserId, getAllLinks, linkExists, isBlacklisted } from '@/lib/db';
+import { createLink, getLinksByUserId, getAllLinks, linkExists, isBlacklisted, getDomainById } from '@/lib/db';
 import { hash } from 'bcryptjs';
 import { customAlphabet } from 'nanoid';
 
@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-  const { destinationUrl, domainId, shortCode, mode, password, customPageConfig, statsEnabled } = body;
+  const { destinationUrl, domainId, shortCode, mode, password, customPageConfig, statsEnabled, redirectDelay, allowSkip, turnstileEnabled } = body;
 
   if (!destinationUrl || !domainId || !mode) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -29,6 +29,17 @@ export async function POST(request: Request) {
 
   try {
     const finalShortCode = shortCode || await generateUniqueShortCode(domainId);
+    const domain = getDomainById(domainId);
+    const effectiveMode = mode === 'turnstile' ? 'simple' : mode;
+    const effectiveTurnstileEnabled = turnstileEnabled || mode === 'turnstile';
+
+    if (!domain) {
+      return NextResponse.json({ error: 'Domain not found' }, { status: 400 });
+    }
+
+    if (effectiveTurnstileEnabled && !domain?.turnstile_site_key) {
+      return NextResponse.json({ error: 'Turnstile is not configured for this domain' }, { status: 400 });
+    }
 
     if (shortCode && isBlacklisted(shortCode)) {
       return NextResponse.json({ error: 'This path is not allowed' }, { status: 400 });
@@ -43,15 +54,18 @@ export async function POST(request: Request) {
       destinationUrl,
       domainId,
       userId: parseInt(session.user.id),
-      mode,
+      mode: effectiveMode,
       statsEnabled: statsEnabled ?? true,
+      redirectDelay: redirectDelay ?? 0,
+      allowSkip: allowSkip ?? true,
+      turnstileEnabled: effectiveTurnstileEnabled,
     };
 
-    if (mode === 'password' && password) {
+    if (effectiveMode === 'password' && password) {
       linkData.passwordHash = await hash(password, 10);
     }
 
-    if (mode === 'custom_page' && customPageConfig) {
+    if (effectiveMode === 'custom_page' && customPageConfig) {
       linkData.customPageConfig = JSON.stringify(customPageConfig);
     }
 
