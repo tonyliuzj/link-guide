@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getDomainById, createLink, linkExists, isBlacklisted } from "@/lib/db"
 import { hash } from "bcryptjs"
+import { buildShortUrl } from "@/lib/domain-utils"
 
 export const runtime = 'nodejs';
 
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
 
   createLink(linkData)
 
-  const shortUrl = `${domain.domain}${domain.base_path !== '/' ? domain.base_path : ''}/${shortCode}`
+  const shortUrl = buildShortUrl(domain.domain, domain.base_path, shortCode)
 
   return NextResponse.json({ success: true, shortUrl })
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { hash } from 'bcryptjs';
-import { createUser, createDomain, completeSetup, isSetupCompleted } from '@/lib/db';
+import { createUser, createDomain, completeSetup, isSetupCompleted, getSiteSettings, updateSiteSettings } from '@/lib/db';
 
 export async function POST(request: Request) {
   if (isSetupCompleted()) {
@@ -18,6 +18,8 @@ export async function POST(request: Request) {
     const passwordHash = await hash(password, 10);
     createUser(email, passwordHash, 'admin');
     createDomain(domain, basePath || '/');
+    const siteTitle = getSiteSettings()?.site_title || 'LinkGuide';
+    updateSiteSettings(siteTitle, domain);
     completeSetup();
 
     return NextResponse.json({ success: true });

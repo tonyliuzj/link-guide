@@ -1,5 +1,5 @@
 import { redirect, notFound } from 'next/navigation';
-import { isSetupCompleted, getAllDomains, getDomainByHostname } from '@/lib/db';
+import { isSetupCompleted, getAllDomains, getDomainByHostname, getSiteSettings } from '@/lib/db';
 import { auth } from '@/lib/auth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -7,8 +7,10 @@ import { GuestLinkForm } from "@/components/guest-link-form"
 import { Footer } from "@/components/footer"
 import Link from "next/link"
 import { headers } from "next/headers"
+import { getRequestHostname, normalizeDomain } from '@/lib/domain-utils';
 
 export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
 
 export default async function Home() {
   if (!isSetupCompleted()) {
@@ -17,17 +19,22 @@ export default async function Home() {
 
   // Check domain-specific base response
   const headersList = await headers();
-  const hostname = headersList.get('host') || '';
+  const hostname = getRequestHostname(headersList);
   const domain = getDomainByHostname(hostname);
+  const siteSettings = getSiteSettings();
+  const isSiteDomain = !!siteSettings?.site_domain
+    && normalizeDomain(siteSettings.site_domain) === normalizeDomain(domain?.domain);
 
-  if (domain && domain.base_response && domain.base_response !== '404') {
-    if (domain.base_response === '444') {
-      return new Response(null, { status: 444, headers: { 'Connection': 'close' } }) as any;
+  const baseResponse = domain?.base_response || '404';
+
+  if (domain && !isSiteDomain && baseResponse !== 'default') {
+    if (baseResponse === '444') {
+      notFound();
     }
-    if (domain.base_response === 'redirect' && domain.base_redirect_url) {
+    if (baseResponse === 'redirect' && domain.base_redirect_url) {
       redirect(domain.base_redirect_url);
     }
-    if (domain.base_response === 'custom') {
+    if (baseResponse === 'custom') {
       return (
         <div className="min-h-screen flex items-center justify-center p-6 bg-muted">
           <div className="max-w-md w-full bg-background rounded-lg shadow-lg p-8 text-center">
@@ -37,6 +44,8 @@ export default async function Home() {
         </div>
       );
     }
+
+    notFound();
   }
 
   const session = await auth();

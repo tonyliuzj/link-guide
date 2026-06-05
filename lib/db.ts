@@ -2,6 +2,7 @@ import Database from 'better-sqlite3';
 import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { createHash } from 'crypto';
+import { getHostnameCandidates, normalizeBasePath, normalizeDomain } from './domain-utils';
 
 const DB_PATH = process.env.DATABASE_URL || './data/linkguide.db';
 let db: Database.Database | null = null;
@@ -33,12 +34,14 @@ export function getDb() {
 }
 
 function initDb() {
+  migrateSetupTableToSettings();
+
   const schema = readFileSync(join(process.cwd(), 'lib', 'schema.sql'), 'utf-8');
   db!.exec(schema);
 
-  const setup = db!.prepare('SELECT * FROM setup WHERE id = 1').get();
-  if (!setup) {
-    db!.prepare('INSERT INTO setup (id, is_completed) VALUES (1, 0)').run();
+  const settings = db!.prepare('SELECT * FROM settings WHERE id = 1').get();
+  if (!settings) {
+    db!.prepare('INSERT INTO settings (id, is_completed) VALUES (1, 0)').run();
   }
 
   // Create guest user (id=0) for guest-created links
@@ -48,17 +51,19 @@ function initDb() {
     // Guest user already exists
   }
 
-  // Add site settings columns to setup table
+  // Add site settings columns to settings table
   try {
-    db!.exec(`ALTER TABLE setup ADD COLUMN site_title TEXT DEFAULT 'LinkGuide'`);
+    db!.exec(`ALTER TABLE settings ADD COLUMN site_title TEXT DEFAULT 'LinkGuide'`);
   } catch (e) {
     // Column already exists
   }
   try {
-    db!.exec(`ALTER TABLE setup ADD COLUMN site_domain TEXT`);
+    db!.exec(`ALTER TABLE settings ADD COLUMN site_domain TEXT`);
   } catch (e) {
     // Column already exists
   }
+
+  migrateSetupRowToSettings();
 
   // Add missing columns to domains table
   try {
@@ -120,22 +125,66 @@ function initDb() {
   }
 }
 
-// Setup
+function tableExists(tableName: string) {
+  return !!db!.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName);
+}
+
+function columnExists(tableName: string, columnName: string) {
+  const columns = db!.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+  return columns.some((column) => column.name === columnName);
+}
+
+function migrateSetupTableToSettings() {
+  if (tableExists('setup') && !tableExists('settings')) {
+    db!.exec('ALTER TABLE setup RENAME TO settings');
+  }
+}
+
+function migrateSetupRowToSettings() {
+  if (!tableExists('setup') || !tableExists('settings')) return;
+
+  const setup = db!.prepare('SELECT * FROM setup WHERE id = 1').get() as {
+    is_completed?: number;
+    site_title?: string | null;
+    site_domain?: string | null;
+  } | undefined;
+
+  if (!setup) return;
+
+  const settings = db!.prepare('SELECT * FROM settings WHERE id = 1').get();
+  if (!settings) {
+    db!.prepare('INSERT INTO settings (id, is_completed) VALUES (1, ?)').run(setup.is_completed ?? 0);
+  } else if (setup.is_completed !== undefined) {
+    db!.prepare('UPDATE settings SET is_completed = ? WHERE id = 1').run(setup.is_completed);
+  }
+
+  if (columnExists('settings', 'site_title') && columnExists('setup', 'site_title') && setup.site_title !== undefined) {
+    db!.prepare('UPDATE settings SET site_title = ? WHERE id = 1').run(setup.site_title);
+  }
+
+  if (columnExists('settings', 'site_domain') && columnExists('setup', 'site_domain') && setup.site_domain !== undefined) {
+    db!.prepare('UPDATE settings SET site_domain = ? WHERE id = 1').run(setup.site_domain);
+  }
+
+  db!.exec('DROP TABLE setup');
+}
+
+// Settings
 export function isSetupCompleted() {
-  const result = getDb().prepare('SELECT is_completed FROM setup WHERE id = 1').get() as { is_completed: number };
+  const result = getDb().prepare('SELECT is_completed FROM settings WHERE id = 1').get() as { is_completed: number };
   return result?.is_completed === 1;
 }
 
 export function completeSetup() {
-  getDb().prepare('UPDATE setup SET is_completed = 1 WHERE id = 1').run();
+  getDb().prepare('UPDATE settings SET is_completed = 1 WHERE id = 1').run();
 }
 
 export function getSiteSettings() {
-  return getDb().prepare('SELECT site_title, site_domain FROM setup WHERE id = 1').get() as { site_title: string; site_domain: string } | undefined;
+  return getDb().prepare('SELECT site_title, site_domain FROM settings WHERE id = 1').get() as { site_title: string; site_domain: string } | undefined;
 }
 
 export function updateSiteSettings(siteTitle: string, siteDomain: string) {
-  return getDb().prepare('UPDATE setup SET site_title = ?, site_domain = ? WHERE id = 1').run(siteTitle, siteDomain);
+  return getDb().prepare('UPDATE settings SET site_title = ?, site_domain = ? WHERE id = 1').run(siteTitle, normalizeDomain(siteDomain));
 }
 
 // Users
@@ -183,11 +232,28 @@ export function updatePassword(id: number, passwordHash: string) {
 
 // Domains
 export function createDomain(domain: string, basePath: string) {
-  return getDb().prepare('INSERT INTO domains (domain, base_path) VALUES (?, ?)').run(domain, basePath);
+  const normalizedDomain = normalizeDomain(domain);
+  if (!normalizedDomain) {
+    throw new Error('Invalid domain');
+  }
+
+  return getDb().prepare('INSERT INTO domains (domain, base_path) VALUES (?, ?)').run(
+    normalizedDomain,
+    normalizeBasePath(basePath)
+  );
 }
 
 export function getDomainByHostname(hostname: string) {
-  return getDb().prepare('SELECT * FROM domains WHERE domain = ? AND is_active = 1').get(hostname) as any;
+  const candidates = getHostnameCandidates(hostname);
+  if (candidates.length === 0) return null;
+
+  const domains = getDb().prepare('SELECT * FROM domains WHERE is_active = 1').all() as any[];
+  for (const candidate of candidates) {
+    const domain = domains.find((item) => normalizeDomain(item.domain) === candidate);
+    if (domain) return domain;
+  }
+
+  return null;
 }
 
 export function getAllDomains() {
@@ -219,8 +285,15 @@ export function updateDomain(id: number, data: {
   const fields = [];
   const values = [];
 
-  if (data.domain !== undefined) { fields.push('domain = ?'); values.push(data.domain); }
-  if (data.basePath !== undefined) { fields.push('base_path = ?'); values.push(data.basePath); }
+  if (data.domain !== undefined) {
+    const normalizedDomain = normalizeDomain(data.domain);
+    if (!normalizedDomain) {
+      throw new Error('Invalid domain');
+    }
+    fields.push('domain = ?');
+    values.push(normalizedDomain);
+  }
+  if (data.basePath !== undefined) { fields.push('base_path = ?'); values.push(normalizeBasePath(data.basePath)); }
   if (data.isActive !== undefined) { fields.push('is_active = ?'); values.push(data.isActive ? 1 : 0); }
   if (data.allowGuestCreate !== undefined) { fields.push('allow_guest_create = ?'); values.push(data.allowGuestCreate ? 1 : 0); }
   if (data.turnstileSiteKey !== undefined) { fields.push('turnstile_site_key = ?'); values.push(data.turnstileSiteKey); }

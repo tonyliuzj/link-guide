@@ -6,11 +6,16 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { normalizeDomain } from "@/lib/domain-utils"
 
 export function SetupForm({ ...props }: React.ComponentProps<typeof Card>) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
+
+  function handleDomainBlur(event: React.FocusEvent<HTMLInputElement>) {
+    event.currentTarget.value = normalizeDomain(event.currentTarget.value)
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -21,7 +26,7 @@ export function SetupForm({ ...props }: React.ComponentProps<typeof Card>) {
     const email = formData.get("email") as string
     const password = formData.get("password") as string
     const confirmPassword = formData.get("confirm-password") as string
-    const domain = (formData.get("domain") as string).replace(/\/+$/, '')
+    const domain = normalizeDomain(formData.get("domain") as string)
     const basePath = formData.get("base-path") as string
 
     if (password !== confirmPassword) {
@@ -71,7 +76,7 @@ export function SetupForm({ ...props }: React.ComponentProps<typeof Card>) {
             </Field>
             <Field>
               <FieldLabel htmlFor="domain">Domain</FieldLabel>
-              <Input id="domain" name="domain" type="text" placeholder="example.com" required />
+              <Input id="domain" name="domain" type="text" placeholder="example.com" onBlur={handleDomainBlur} required />
               <FieldDescription>Your primary domain for short links.</FieldDescription>
             </Field>
             <Field>

@@ -35,18 +35,25 @@ export async function PUT(
   const { id } = await params
   const body = await req.json()
 
-  updateDomain(parseInt(id), {
-    domain: body.domain,
-    basePath: body.basePath,
-    isActive: body.isActive,
-    allowGuestCreate: body.allowGuestCreate,
-    turnstileSiteKey: body.turnstileSiteKey,
-    turnstileSecretKey: body.turnstileSecretKey,
-    baseResponse: body.baseResponse,
-    baseRedirectUrl: body.baseRedirectUrl,
-  })
+  try {
+    updateDomain(parseInt(id), {
+      domain: body.domain,
+      basePath: body.basePath,
+      isActive: body.isActive,
+      allowGuestCreate: body.allowGuestCreate,
+      turnstileSiteKey: body.turnstileSiteKey,
+      turnstileSecretKey: body.turnstileSecretKey,
+      baseResponse: body.baseResponse,
+      baseRedirectUrl: body.baseRedirectUrl,
+    })
 
-  return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to update domain" },
+      { status: 400 }
+    )
+  }
 }
 
 export async function DELETE(

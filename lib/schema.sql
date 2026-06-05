@@ -1,7 +1,9 @@
--- Setup table
-CREATE TABLE IF NOT EXISTS setup (
+-- Settings table
+CREATE TABLE IF NOT EXISTS settings (
   id INTEGER PRIMARY KEY CHECK (id = 1),
-  is_completed INTEGER NOT NULL DEFAULT 0
+  is_completed INTEGER NOT NULL DEFAULT 0,
+  site_title TEXT DEFAULT 'LinkGuide',
+  site_domain TEXT
 );
 
 -- Users table
@@ -22,6 +24,8 @@ CREATE TABLE IF NOT EXISTS domains (
   allow_guest_create INTEGER NOT NULL DEFAULT 0,
   turnstile_site_key TEXT,
   turnstile_secret_key TEXT,
+  base_response TEXT NOT NULL DEFAULT '404',
+  base_redirect_url TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

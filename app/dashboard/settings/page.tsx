@@ -12,12 +12,17 @@ import { useState, useEffect } from "react"
 import { toast } from "sonner"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
+import { normalizeDomain } from "@/lib/domain-utils"
 
 export default function Page() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [settings, setSettings] = useState<any>(null)
+
+  function handleDomainBlur(event: React.FocusEvent<HTMLInputElement>) {
+    event.currentTarget.value = normalizeDomain(event.currentTarget.value)
+  }
 
   useEffect(() => {
     if (status === "loading") return
@@ -47,7 +52,7 @@ export default function Page() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         siteTitle: formData.get("siteTitle"),
-        siteDomain: formData.get("siteDomain"),
+        siteDomain: normalizeDomain(formData.get("siteDomain")?.toString() || ""),
       }),
     })
 
@@ -124,7 +129,7 @@ export default function Page() {
                 </div>
                 <div>
                   <Label htmlFor="siteDomain">Site Domain</Label>
-                  <Input id="siteDomain" name="siteDomain" defaultValue={settings.site_domain || ''} placeholder="example.com" />
+                  <Input id="siteDomain" name="siteDomain" defaultValue={settings.site_domain || ''} placeholder="example.com" onBlur={handleDomainBlur} />
                 </div>
                 <Button type="submit" disabled={loading}>
                   {loading ? "Saving..." : "Save Changes"}

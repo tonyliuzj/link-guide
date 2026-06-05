@@ -10,11 +10,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import { normalizeDomain } from "@/lib/domain-utils"
 
 export default function Page() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
+
+  function handleDomainBlur(event: React.FocusEvent<HTMLInputElement>) {
+    event.currentTarget.value = normalizeDomain(event.currentTarget.value)
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -22,7 +27,7 @@ export default function Page() {
     setError("")
 
     const formData = new FormData(e.currentTarget)
-    const domain = formData.get("domain")?.toString().replace(/\/+$/, '') || ''
+    const domain = normalizeDomain(formData.get("domain")?.toString() || '')
     const data = {
       domain,
       basePath: formData.get("basePath"),
@@ -74,6 +79,7 @@ export default function Page() {
                     name="domain"
                     type="text"
                     placeholder="example.com"
+                    onBlur={handleDomainBlur}
                     required
                   />
                 </div>

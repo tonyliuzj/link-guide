@@ -14,6 +14,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import { normalizeDomain } from "@/lib/domain-utils"
 
 export default function Page({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
@@ -23,6 +24,10 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
   const [baseResponse, setBaseResponse] = useState<string>("404")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [siteSettings, setSiteSettings] = useState<any>(null)
+
+  function handleDomainBlur(event: React.FocusEvent<HTMLInputElement>) {
+    event.currentTarget.value = normalizeDomain(event.currentTarget.value)
+  }
 
   useEffect(() => {
     params.then(p => {
@@ -43,7 +48,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
     e.preventDefault()
     setLoading(true)
     const formData = new FormData(e.currentTarget)
-    const domainValue = formData.get("domain")?.toString().replace(/\/+$/, '') || ''
+    const domainValue = normalizeDomain(formData.get("domain")?.toString() || '')
 
     const res = await fetch(`/api/domains/${id}`, {
       method: "PUT",
@@ -139,7 +144,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                   <CardContent className="space-y-4">
                     <div>
                       <Label htmlFor="domain">Domain</Label>
-                      <Input id="domain" name="domain" type="text" defaultValue={domain.domain} placeholder="example.com" />
+                      <Input id="domain" name="domain" type="text" defaultValue={domain.domain} placeholder="example.com" onBlur={handleDomainBlur} />
                     </div>
                     <div>
                       <Label htmlFor="basePath">Base Path</Label>
@@ -208,6 +213,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                         onChange={(e) => setBaseResponse(e.target.value)}
                         disabled={siteSettings?.site_domain === domain.domain}
                       >
+                        <option value="default">Default</option>
                         <option value="404">404 Not Found</option>
                         <option value="444">444 Connection Closed</option>
                         <option value="redirect">Redirect to URL</option>
