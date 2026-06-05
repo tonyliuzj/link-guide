@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,14 +22,26 @@ export function GuestLinkForm({
   const [createdLink, setCreatedLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [mode, setMode] = useState("simple")
-  const [turnstileKey, setTurnstileKey] = useState(0)
+  const turnstileRef = useRef<HTMLDivElement>(null)
+  const widgetIdRef = useRef<string | null>(null)
+  const [turnstileLoaded, setTurnstileLoaded] = useState(false)
 
   useEffect(() => {
     if (turnstileSiteKey && turnstileRequired) {
+      if ((window as any).turnstile) {
+        setTurnstileLoaded(true)
+        return
+      }
+
       const script = document.createElement("script")
       script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js"
       script.async = true
       script.defer = true
+
+      script.onload = () => {
+        setTurnstileLoaded(true)
+      }
+
       document.body.appendChild(script)
 
       return () => {
@@ -39,6 +51,24 @@ export function GuestLinkForm({
       }
     }
   }, [turnstileSiteKey, turnstileRequired])
+
+  useEffect(() => {
+    if (turnstileLoaded && turnstileRef.current && !createdLink && widgetIdRef.current === null) {
+      widgetIdRef.current = (window as any).turnstile.render(turnstileRef.current, {
+        sitekey: turnstileSiteKey
+      })
+    }
+  }, [turnstileLoaded, createdLink, turnstileSiteKey])
+
+  function resetTurnstile() {
+    if ((window as any).turnstile && widgetIdRef.current) {
+      try {
+        (window as any).turnstile.reset(widgetIdRef.current)
+      } catch (e) {
+        console.error('Failed to reset turnstile:', e)
+      }
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -59,14 +89,14 @@ export function GuestLinkForm({
       if (!res.ok) {
         toast.error(data.error || "Failed to create link")
         setIsSubmitting(false)
-        setTurnstileKey(prev => prev + 1)
+        resetTurnstile()
         return
       }
 
       setCreatedLink(data.shortUrl)
     } catch (error) {
       toast.error("Failed to create link")
-      setTurnstileKey(prev => prev + 1)
+      resetTurnstile()
     } finally {
       setIsSubmitting(false)
     }
@@ -81,9 +111,16 @@ export function GuestLinkForm({
   }
 
   function createAnother() {
+    if ((window as any).turnstile && widgetIdRef.current) {
+      try {
+        (window as any).turnstile.remove(widgetIdRef.current)
+      } catch (e) {
+        console.error('Failed to remove turnstile:', e)
+      }
+      widgetIdRef.current = null
+    }
     setCreatedLink(null)
     setCopied(false)
-    setTurnstileKey(prev => prev + 1)
   }
 
   if (createdLink) {
@@ -279,12 +316,7 @@ export function GuestLinkForm({
       )}
 
       {turnstileSiteKey && turnstileRequired && (
-        <div key={turnstileKey} className="flex justify-center">
-          <div
-            className="cf-turnstile"
-            data-sitekey={turnstileSiteKey}
-          />
-        </div>
+        <div ref={turnstileRef} className="flex justify-center" />
       )}
 
       <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
