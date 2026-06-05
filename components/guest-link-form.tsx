@@ -22,6 +22,7 @@ export function GuestLinkForm({
   const [createdLink, setCreatedLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [mode, setMode] = useState("simple")
+  const [turnstileKey, setTurnstileKey] = useState(0)
 
   useEffect(() => {
     if (turnstileSiteKey && turnstileRequired) {
@@ -80,6 +81,7 @@ export function GuestLinkForm({
   function createAnother() {
     setCreatedLink(null)
     setCopied(false)
+    setTurnstileKey(prev => prev + 1)
   }
 
   if (createdLink) {
@@ -275,7 +277,7 @@ export function GuestLinkForm({
       )}
 
       {turnstileSiteKey && turnstileRequired && (
-        <div className="flex justify-center">
+        <div key={turnstileKey} className="flex justify-center">
           <div
             className="cf-turnstile"
             data-sitekey={turnstileSiteKey}
