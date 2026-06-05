@@ -214,6 +214,10 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                           onChange={(e) => setRedirectDelay(e.target.value === '' ? '' : parseInt(e.target.value))}
                         />
                       </div>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="allowSkip">Allow Skip Delay</Label>
+                        <Switch id="allowSkip" checked={allowSkip} onCheckedChange={setAllowSkip} />
+                      </div>
                       {domain?.turnstile_site_key && (
                         <div className="flex items-center justify-between">
                           <Label htmlFor="turnstileEnabled">Enable Turnstile Verification</Label>
