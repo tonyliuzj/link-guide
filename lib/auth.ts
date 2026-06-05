@@ -1,7 +1,27 @@
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import { compare } from "bcryptjs"
+import { normalizeDomain } from "@/lib/domain-utils"
 import { getRequestIp, verifyTurnstileToken } from "@/lib/turnstile"
+
+function getProtocolForDomain(domain: string) {
+  return domain.startsWith("localhost") || domain.startsWith("127.0.0.1") || domain.startsWith("[::1]")
+    ? "http"
+    : "https"
+}
+
+async function getConfiguredSiteOrigin() {
+  try {
+    const { getSiteSettings } = await import("@/lib/db")
+    const domain = normalizeDomain(getSiteSettings()?.site_domain || "")
+
+    if (!domain) return null
+
+    return `${getProtocolForDomain(domain)}://${domain}`
+  } catch {
+    return null
+  }
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: process.env.AUTH_TRUST_HOST !== "false",
@@ -52,6 +72,26 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      const siteOrigin = await getConfiguredSiteOrigin()
+      const fallbackOrigin = siteOrigin || baseUrl
+
+      if (url.startsWith("/")) {
+        return `${fallbackOrigin}${url}`
+      }
+
+      try {
+        const parsedUrl = new URL(url)
+
+        if (parsedUrl.origin === baseUrl || parsedUrl.origin === siteOrigin) {
+          return siteOrigin ? `${siteOrigin}${parsedUrl.pathname}${parsedUrl.search}${parsedUrl.hash}` : url
+        }
+      } catch {
+        // Invalid URLs fall through to the safe fallback origin.
+      }
+
+      return fallbackOrigin
+    },
     async jwt({ token, user }) {
       if (user) {
         token.role = user.role
