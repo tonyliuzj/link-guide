@@ -13,10 +13,15 @@ export function PasswordPage({
   turnstileEnabled?: boolean
 }) {
   const [error, setError] = useState("")
+  const [turnstileCompleted, setTurnstileCompleted] = useState(false)
   const showTurnstile = turnstileSiteKey && turnstileEnabled
 
   useEffect(() => {
     if (showTurnstile) {
+      (window as any).onTurnstileSuccess = () => {
+        setTurnstileCompleted(true)
+      }
+
       const script = document.createElement("script")
       script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js"
       script.async = true
@@ -24,7 +29,10 @@ export function PasswordPage({
       document.body.appendChild(script)
 
       return () => {
-        document.body.removeChild(script)
+        delete (window as any).onTurnstileSuccess
+        if (document.body.contains(script)) {
+          document.body.removeChild(script)
+        }
       }
     }
   }, [showTurnstile])
@@ -49,12 +57,14 @@ export function PasswordPage({
               <div
                 className="cf-turnstile"
                 data-sitekey={turnstileSiteKey}
+                data-callback="onTurnstileSuccess"
               />
             </div>
           )}
           <button
             type="submit"
-            className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+            disabled={showTurnstile && !turnstileCompleted}
+            className="w-full px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Submit
           </button>
