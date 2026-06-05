@@ -34,20 +34,19 @@ export function PasswordPage({
       const res = await fetch(apiUrl, {
         method: "POST",
         body: formData,
-        redirect: "follow"
       })
 
-      if (res.redirected) {
-        window.location.href = res.url
-        return
+      if (res.ok) {
+        const data = await res.json()
+        if (data.success && data.redirectUrl) {
+          window.location.href = data.redirectUrl
+          return
+        }
       }
 
-      if (!res.ok) {
-        const text = await res.text()
-        setError(text || "Invalid password")
-        setIsSubmitting(false)
-        return
-      }
+      const text = await res.text()
+      setError(text || "Invalid password")
+      setIsSubmitting(false)
     } catch (err) {
       setError("Failed to verify password")
       setIsSubmitting(false)

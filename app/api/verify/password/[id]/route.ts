@@ -47,7 +47,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const isValid = await compare(password, link.password_hash)
 
   if (isValid) {
-    return NextResponse.redirect(link.destination_url, 303)
+    return NextResponse.json({ success: true, redirectUrl: link.destination_url })
   }
 
   return new NextResponse("Invalid password", { status: 401 })
