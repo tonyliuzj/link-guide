@@ -44,6 +44,8 @@ export default async function Page({ params }: { params: Promise<{ path: string[
           siteKey={domain.turnstile_site_key}
           destinationUrl={link.destination_url}
           allowSkip={false}
+          redirectDelay={link.redirect_delay}
+          allowSkipDelay={link.allow_skip === 1}
         />
       );
     }
