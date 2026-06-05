@@ -21,7 +21,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
   const [id, setId] = useState<string>("")
   const [domain, setDomain] = useState<any>(null)
   const [loading, setLoading] = useState(false)
-  const [baseResponse, setBaseResponse] = useState<string>("404")
+  const [baseResponse, setBaseResponse] = useState<string>("default")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [siteSettings, setSiteSettings] = useState<any>(null)
 

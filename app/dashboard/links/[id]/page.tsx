@@ -239,21 +239,6 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                         <Label htmlFor="password">Password</Label>
                         <Input id="password" name="password" type="password" />
                       </div>
-                      <div>
-                        <Label htmlFor="redirectDelay">Redirect Delay (seconds)</Label>
-                        <Input
-                          id="redirectDelay"
-                          name="redirectDelay"
-                          type="number"
-                          min="0"
-                          value={redirectDelay}
-                          onChange={(e) => setRedirectDelay(e.target.value === '' ? '' : parseInt(e.target.value))}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="allowSkip">Allow Skip</Label>
-                        <Switch id="allowSkip" checked={allowSkip} onCheckedChange={setAllowSkip} />
-                      </div>
                       <div className="flex items-center justify-between">
                         <Label htmlFor="turnstileEnabled">Enable Turnstile Verification</Label>
                         <Switch id="turnstileEnabled" checked={turnstileEnabled} onCheckedChange={setTurnstileEnabled} />
