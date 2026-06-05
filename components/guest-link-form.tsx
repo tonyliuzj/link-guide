@@ -59,12 +59,14 @@ export function GuestLinkForm({
       if (!res.ok) {
         toast.error(data.error || "Failed to create link")
         setIsSubmitting(false)
+        setTurnstileKey(prev => prev + 1)
         return
       }
 
       setCreatedLink(data.shortUrl)
     } catch (error) {
       toast.error("Failed to create link")
+      setTurnstileKey(prev => prev + 1)
     } finally {
       setIsSubmitting(false)
     }
