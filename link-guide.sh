@@ -9,8 +9,8 @@ set -euo pipefail
 #   APP_NAME=my-app GIT_REPO=https://github.com/me/my-app.git bash installer.sh
 # ============================================================
 
-APP_NAME="${APP_NAME:-linkguide}"
-APP_TITLE="${APP_TITLE:-LinkGuide}"
+APP_NAME="${APP_NAME:-link-guide}"
+APP_TITLE="${APP_TITLE:-link-guide}"
 GIT_REPO="${GIT_REPO:-https://github.com/tonyliuzj/link-guide.git}"
 
 RUN_USER="${SUDO_USER:-$USER}"
@@ -345,12 +345,12 @@ write_direct_env_file() {
   step "Writing direct deployment environment file..."
 
   cat > "${INSTALL_DIR}/${APP_ENV_FILE}" <<EOF
-# LinkGuide Environment Configuration
+# link-guide Environment Configuration
 
 # Session secret for NextAuth (generate a random string)
 SESSION_PASSWORD=$SESSION_PASS
 
-# Database location (default: ./data/linkguide.db)
+# Database location (default: ./data/link-guide.sqlite)
 DATABASE_URL=$DIRECT_DATABASE_PATH
 
 # Server port (default: 3000)
@@ -362,12 +362,12 @@ write_docker_env_files() {
   step "Writing Docker deployment environment files..."
 
   cat > "${INSTALL_DIR}/${APP_ENV_FILE}" <<EOF
-# LinkGuide Environment Configuration
+# link-guide Environment Configuration
 
 # Session secret for NextAuth (generate a random string)
 SESSION_PASSWORD=$SESSION_PASS
 
-# Database location (default: ./data/linkguide.db)
+# Database location (default: /app/data/link-guide.sqlite)
 DATABASE_URL=$DOCKER_DATABASE_PATH
 
 # Server port (default: 3000)
