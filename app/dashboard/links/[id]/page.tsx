@@ -218,12 +218,20 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                         <Label htmlFor="allowSkip">Allow Skip Delay</Label>
                         <Switch id="allowSkip" checked={allowSkip} onCheckedChange={setAllowSkip} />
                       </div>
-                      {domain?.turnstile_site_key && (
-                        <div className="flex items-center justify-between">
+                      <div className={`flex items-center justify-between ${!domain?.turnstile_site_key ? 'opacity-50' : ''}`}>
+                        <div className="space-y-0.5">
                           <Label htmlFor="turnstileEnabled">Enable Turnstile Verification</Label>
-                          <Switch id="turnstileEnabled" checked={turnstileEnabled} onCheckedChange={setTurnstileEnabled} />
+                          {!domain?.turnstile_site_key && (
+                            <div className="text-xs text-muted-foreground">Turnstile not configured for this domain</div>
+                          )}
                         </div>
-                      )}
+                        <Switch
+                          id="turnstileEnabled"
+                          checked={turnstileEnabled}
+                          onCheckedChange={setTurnstileEnabled}
+                          disabled={!domain?.turnstile_site_key}
+                        />
+                      </div>
                     </CardContent>
                   </Card>
                 )}
@@ -239,12 +247,20 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                         <Label htmlFor="password">Password</Label>
                         <Input id="password" name="password" type="password" />
                       </div>
-                      {domain?.turnstile_site_key && (
-                        <div className="flex items-center justify-between">
+                      <div className={`flex items-center justify-between ${!domain?.turnstile_site_key ? 'opacity-50' : ''}`}>
+                        <div className="space-y-0.5">
                           <Label htmlFor="turnstileEnabled">Enable Turnstile Verification</Label>
-                          <Switch id="turnstileEnabled" checked={turnstileEnabled} onCheckedChange={setTurnstileEnabled} />
+                          {!domain?.turnstile_site_key && (
+                            <div className="text-xs text-muted-foreground">Turnstile not configured for this domain</div>
+                          )}
                         </div>
-                      )}
+                        <Switch
+                          id="turnstileEnabled"
+                          checked={turnstileEnabled}
+                          onCheckedChange={setTurnstileEnabled}
+                          disabled={!domain?.turnstile_site_key}
+                        />
+                      </div>
                     </CardContent>
                   </Card>
                 )}
@@ -268,12 +284,20 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
                         <Label htmlFor="buttonText">Button Text</Label>
                         <Input id="buttonText" name="buttonText" defaultValue={customConfig.buttonText || ''} />
                       </div>
-                      {domain?.turnstile_site_key && (
-                        <div className="flex items-center justify-between">
+                      <div className={`flex items-center justify-between ${!domain?.turnstile_site_key ? 'opacity-50' : ''}`}>
+                        <div className="space-y-0.5">
                           <Label htmlFor="turnstileEnabled">Enable Turnstile Verification</Label>
-                          <Switch id="turnstileEnabled" checked={turnstileEnabled} onCheckedChange={setTurnstileEnabled} />
+                          {!domain?.turnstile_site_key && (
+                            <div className="text-xs text-muted-foreground">Turnstile not configured for this domain</div>
+                          )}
                         </div>
-                      )}
+                        <Switch
+                          id="turnstileEnabled"
+                          checked={turnstileEnabled}
+                          onCheckedChange={setTurnstileEnabled}
+                          disabled={!domain?.turnstile_site_key}
+                        />
+                      </div>
                     </CardContent>
                   </Card>
                 )}
