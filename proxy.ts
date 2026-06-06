@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getDomainByHostname, getSiteSettings } from './lib/db';
-import { getRequestHostname, normalizeDomain } from './lib/domain-utils';
+import { getDomainByHostname, getSiteSettings } from './src/lib/db';
+import { getRequestHostname, normalizeDomain } from './src/lib/domainUtils';
 
 export function proxy(request: NextRequest) {
   const hostname = getRequestHostname(request.headers);
