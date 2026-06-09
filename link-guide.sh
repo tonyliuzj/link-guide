@@ -373,9 +373,9 @@ install_docker_dependencies() {
     as_root apt install -y docker.io
   fi
 
-  if ! docker compose version >/dev/null 2>&1 && ! command_exists docker-compose; then
-    step "Installing Docker Compose..."
-    as_root apt install -y docker-compose-plugin || as_root apt install -y docker-compose
+  if ! docker compose version >/dev/null 2>&1; then
+    step "Installing Docker Compose plugin..."
+    as_root apt install -y docker-compose-plugin
   fi
 
   step "Enabling and starting Docker..."
@@ -387,6 +387,11 @@ install_docker_dependencies() {
 }
 
 ensure_docker_available() {
+  if ! command_exists docker || ! docker compose version >/dev/null 2>&1; then
+    install_docker_dependencies
+    return
+  fi
+
   check_required_commands docker
   check_docker_compose_command
 
@@ -401,12 +406,7 @@ check_docker_compose_command() {
     return 0
   fi
 
-  if command_exists docker-compose; then
-    echo "OK: docker-compose"
-    return 0
-  fi
-
-  echo "Docker Compose is not installed. Run Docker install first."
+  echo "Docker Compose plugin is not installed. Run Docker install first."
   exit 1
 }
 
@@ -414,24 +414,15 @@ compose() {
   require_repo_checkout
   require_compose_file
 
-  if docker compose version >/dev/null 2>&1; then
-    (
-      cd "$INSTALL_DIR"
-      as_root docker compose -f "$COMPOSE_FILE" "$@"
-    )
-    return
+  if ! docker compose version >/dev/null 2>&1; then
+    echo "Docker Compose plugin is required but was not found."
+    exit 1
   fi
 
-  if command_exists docker-compose; then
-    (
-      cd "$INSTALL_DIR"
-      as_root docker-compose -f "$COMPOSE_FILE" "$@"
-    )
-    return
-  fi
-
-  echo "Docker Compose is required but was not found."
-  exit 1
+  (
+    cd "$INSTALL_DIR"
+    as_root docker compose -f "$COMPOSE_FILE" "$@"
+  )
 }
 
 require_compose_file() {
@@ -867,7 +858,7 @@ uninstall_docker_mode() {
   echo "Uninstalling ${APP_TITLE} Docker deployment..."
 
   if [ -d "$INSTALL_DIR" ]; then
-    if command_exists docker && { docker compose version >/dev/null 2>&1 || command_exists docker-compose; }; then
+    if command_exists docker && docker compose version >/dev/null 2>&1; then
       step "Stopping and removing Docker containers..."
       compose down --remove-orphans || true
     fi
