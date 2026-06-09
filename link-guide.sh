@@ -169,6 +169,49 @@ apt_update() {
   as_root apt update
 }
 
+apt_package_available() {
+  local package_name="$1"
+  local candidate
+
+  candidate="$(apt_package_candidate "$package_name")"
+  [ -n "$candidate" ] && [ "$candidate" != "(none)" ]
+}
+
+apt_package_candidate() {
+  local package_name="$1"
+
+  apt-cache policy "$package_name" 2>/dev/null | awk '/Candidate:/ { print $2; exit }'
+}
+
+apt_packages_available() {
+  local package_name
+
+  for package_name in "$@"; do
+    if ! apt_package_available "$package_name"; then
+      return 1
+    fi
+  done
+
+  return 0
+}
+
+docker_compose_package_supports_v2() {
+  local package_name="$1"
+  local candidate
+  local version_without_epoch
+  local major_version
+
+  if [ "$package_name" != "docker-compose" ]; then
+    return 0
+  fi
+
+  candidate="$(apt_package_candidate "$package_name")"
+  version_without_epoch="${candidate#*:}"
+  major_version="${version_without_epoch%%.*}"
+
+  [ "$major_version" -ge 2 ] 2>/dev/null
+}
+
 upgrade_system_packages() {
   if [ "$SYSTEM_UPGRADE_DONE" = "1" ]; then
     return 0
@@ -427,6 +470,57 @@ remove_docker_conflicting_packages() {
   hash -r || true
 }
 
+install_docker_engine_package() {
+  step "Installing Docker..."
+
+  if apt_packages_available docker-ce docker-ce-cli containerd.io docker-buildx-plugin; then
+    as_root apt install -y \
+      docker-ce \
+      docker-ce-cli \
+      containerd.io \
+      docker-buildx-plugin
+    return 0
+  fi
+
+  echo "Docker CE packages are not available from apt. Falling back to distribution Docker packages."
+  as_root apt install -y docker.io
+}
+
+install_docker_compose_package() {
+  local package_name
+  local attempted=0
+
+  for package_name in docker-compose-plugin docker-compose-v2 docker-compose; do
+    if ! apt_package_available "$package_name"; then
+      continue
+    fi
+
+    if ! docker_compose_package_supports_v2 "$package_name"; then
+      echo "Skipping ${package_name} because its apt candidate is Compose v1."
+      continue
+    fi
+
+    attempted=1
+    step "Installing Docker Compose (${package_name})..."
+    as_root apt install -y "$package_name"
+    hash -r || true
+
+    if docker compose version >/dev/null 2>&1; then
+      return 0
+    fi
+
+    echo "Package ${package_name} did not provide 'docker compose'. Trying another package if available."
+  done
+
+  if [ "$attempted" = "0" ]; then
+    echo "No Docker Compose v2 apt package was found."
+  else
+    echo "No installed Docker Compose package provided the 'docker compose' command."
+  fi
+
+  return 1
+}
+
 # ============================================================
 # Dependency installation
 # ============================================================
@@ -462,24 +556,21 @@ install_docker_dependencies() {
     gnupg \
     openssl
 
-  if ! command_exists docker || ! docker compose version >/dev/null 2>&1; then
+  if ! command_exists docker; then
     configure_docker_repo
     remove_docker_conflicting_packages
-  fi
-
-  if ! command_exists docker; then
-    step "Installing Docker..."
-    as_root apt install -y \
-      docker-ce \
-      docker-ce-cli \
-      containerd.io \
-      docker-buildx-plugin \
-      docker-compose-plugin
+    install_docker_engine_package
   fi
 
   if ! docker compose version >/dev/null 2>&1; then
-    step "Installing Docker Compose plugin..."
-    as_root apt install -y docker-compose-plugin
+    if ! install_docker_compose_package; then
+      configure_docker_repo
+      install_docker_compose_package || {
+        echo "Docker Compose v2 could not be installed automatically."
+        echo "Install Docker Compose manually, then rerun this script."
+        exit 1
+      }
+    fi
   fi
 
   step "Enabling and starting Docker..."
