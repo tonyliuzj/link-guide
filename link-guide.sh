@@ -31,6 +31,8 @@ SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}"
 NODESOURCE_NODE_VERSION="${NODESOURCE_NODE_VERSION:-22.x}"
 NODESOURCE_KEYRING="/usr/share/keyrings/nodesource.gpg"
 NODESOURCE_KEY_URL="https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key"
+DOCKER_KEYRING="/etc/apt/keyrings/docker.asc"
+DOCKER_SOURCE_FILE="/etc/apt/sources.list.d/docker.sources"
 
 DEFAULT_ADMIN_USERNAME="${DEFAULT_ADMIN_USERNAME:-admin}"
 DEFAULT_ADMIN_PASSWORD="${DEFAULT_ADMIN_PASSWORD:-changeme}"
@@ -334,6 +336,98 @@ ensure_nodejs() {
 }
 
 # ============================================================
+# Docker repository functions
+# ============================================================
+
+configure_docker_repo() {
+  local docker_os
+  local docker_codename
+  local arch
+
+  if [ ! -r /etc/os-release ]; then
+    echo "Cannot configure Docker repository because /etc/os-release was not found."
+    exit 1
+  fi
+
+  # shellcheck disable=SC1091
+  . /etc/os-release
+
+  case "${ID:-}" in
+    ubuntu)
+      docker_os="ubuntu"
+      docker_codename="${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}"
+      ;;
+    debian)
+      docker_os="debian"
+      docker_codename="${VERSION_CODENAME:-}"
+      ;;
+    *)
+      if [[ " ${ID_LIKE:-} " == *" ubuntu "* ]]; then
+        docker_os="ubuntu"
+        docker_codename="${UBUNTU_CODENAME:-${VERSION_CODENAME:-}}"
+      elif [[ " ${ID_LIKE:-} " == *" debian "* ]]; then
+        docker_os="debian"
+        docker_codename="${VERSION_CODENAME:-}"
+      else
+        echo "Unsupported OS for automatic Docker install: ${PRETTY_NAME:-unknown}"
+        echo "Install Docker with Compose v2 manually, then rerun this script."
+        exit 1
+      fi
+      ;;
+  esac
+
+  if [ -z "$docker_codename" ]; then
+    echo "Could not determine OS codename for Docker repository."
+    echo "Install Docker with Compose v2 manually, then rerun this script."
+    exit 1
+  fi
+
+  arch="$(dpkg --print-architecture)"
+
+  step "Configuring Docker apt repository..."
+
+  as_root install -m 0755 -d "$(dirname "$DOCKER_KEYRING")"
+  as_root curl -fsSL "https://download.docker.com/linux/${docker_os}/gpg" -o "$DOCKER_KEYRING"
+  as_root chmod a+r "$DOCKER_KEYRING"
+
+  as_root tee "$DOCKER_SOURCE_FILE" >/dev/null <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/${docker_os}
+Suites: ${docker_codename}
+Components: stable
+Architectures: ${arch}
+Signed-By: ${DOCKER_KEYRING}
+EOF
+
+  apt_update
+}
+
+remove_docker_conflicting_packages() {
+  local installed_packages
+
+  installed_packages="$(
+    dpkg-query -W -f='${binary:Package}\n' \
+      docker.io \
+      docker-doc \
+      docker-compose \
+      docker-compose-v2 \
+      podman-docker \
+      containerd \
+      runc \
+      2>/dev/null || true
+  )"
+
+  if [ -z "$installed_packages" ]; then
+    return 0
+  fi
+
+  step "Removing Docker packages that conflict with Docker's official packages..."
+  # shellcheck disable=SC2086
+  as_root apt remove -y $installed_packages
+  hash -r || true
+}
+
+# ============================================================
 # Dependency installation
 # ============================================================
 
@@ -368,9 +462,19 @@ install_docker_dependencies() {
     gnupg \
     openssl
 
+  if ! command_exists docker || ! docker compose version >/dev/null 2>&1; then
+    configure_docker_repo
+    remove_docker_conflicting_packages
+  fi
+
   if ! command_exists docker; then
     step "Installing Docker..."
-    as_root apt install -y docker.io
+    as_root apt install -y \
+      docker-ce \
+      docker-ce-cli \
+      containerd.io \
+      docker-buildx-plugin \
+      docker-compose-plugin
   fi
 
   if ! docker compose version >/dev/null 2>&1; then
