@@ -22,11 +22,84 @@ curl -sSL https://github.com/tonyliuzj/link-guide/releases/latest/download/link-
 ```
 
 This will download and run the installer, which supports both systemd and Docker deployments.
+Choose **Docker install (Compose)** in the installer to run the published Docker image.
+
+## Docker
+
+The Docker image is published to Docker Hub:
+
+```text
+tonyliuzj/link-guide:latest
+tonyliuzj/link-guide:0.1.0
+```
+
+### Docker Run
+
+```bash
+docker run -d \
+  --name link-guide \
+  --restart unless-stopped \
+  -p 3000:3000 \
+  -v link-guide-data:/app/data \
+  -e SESSION_PASSWORD="$(openssl rand -base64 32)" \
+  -e AUTH_TRUST_HOST=true \
+  -e DATABASE_URL=/app/data/link-guide.sqlite \
+  tonyliuzj/link-guide:latest
+```
+
+Visit `http://localhost:3000/setup` after the container starts.
+
+### Docker Compose
+
+```bash
+git clone https://github.com/tonyliuzj/link-guide.git
+cd link-guide
+cp example.env.local .env.local
+```
+
+Edit `.env.local` for Docker:
+
+```env
+SESSION_PASSWORD=replace-with-openssl-rand-base64-32
+AUTH_TRUST_HOST=true
+DATABASE_URL=/app/data/link-guide.sqlite
+PORT=3000
+```
+
+Optional Compose settings go in `.env`:
+
+```env
+HOST_PORT=3000
+CONTAINER_PORT=3000
+DOCKER_IMAGE=tonyliuzj/link-guide:latest
+```
+
+Start with the Docker Hub image:
+
+```bash
+docker compose pull
+docker compose up -d --no-build
+```
+
+Or build locally from the checkout:
+
+```bash
+docker compose build
+docker compose up -d --no-build
+```
+
+Useful commands:
+
+```bash
+docker compose ps
+docker compose logs -f
+docker compose down
+```
 
 ## Prerequisites
 
-- Node.js 18 or higher
-- npm or yarn
+- Docker and Docker Compose for Docker installs
+- Node.js 18 or higher and npm for direct/manual installs
 
 ## Manual Setup
 

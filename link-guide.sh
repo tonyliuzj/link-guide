@@ -19,6 +19,7 @@ RUN_GROUP="$(id -gn "$RUN_USER")"
 APP_ENV_FILE="${APP_ENV_FILE:-.env.local}"
 COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env}"
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
+DOCKER_IMAGE="${DOCKER_IMAGE:-tonyliuzj/link-guide:latest}"
 
 DIRECT_DATABASE_PATH="${DIRECT_DATABASE_PATH:-data/${APP_NAME}.sqlite}"
 DOCKER_DATABASE_PATH="${DOCKER_DATABASE_PATH:-/app/data/${APP_NAME}.sqlite}"
@@ -440,6 +441,19 @@ require_compose_file() {
   fi
 }
 
+pull_or_build_docker_image() {
+  step "Pulling Docker image..."
+
+  if compose pull; then
+    return 0
+  fi
+
+  echo "Could not pull ${DOCKER_IMAGE}. Building from the local checkout instead."
+
+  step "Building Docker image..."
+  compose build
+}
+
 # ============================================================
 # Project dependency functions
 # ============================================================
@@ -568,6 +582,8 @@ EOF
 # Docker Compose environment file
 
 HOST_PORT=$HOST_PORT
+CONTAINER_PORT=$CONTAINER_PORT
+DOCKER_IMAGE=$DOCKER_IMAGE
 EOF
 }
 
@@ -771,8 +787,10 @@ install_docker_mode() {
   step "Creating data directory..."
   mkdir -p "${INSTALL_DIR}/data"
 
-  step "Building and starting Docker services..."
-  compose up -d --build
+  pull_or_build_docker_image
+
+  step "Starting Docker services..."
+  compose up -d --no-build
 
   echo
   echo "Installation complete!"
@@ -794,8 +812,10 @@ update_docker_mode() {
 
   ensure_app_env_defaults
 
-  step "Rebuilding and restarting Docker services..."
-  compose up -d --build
+  pull_or_build_docker_image
+
+  step "Restarting Docker services..."
+  compose up -d --no-build
 
   HOST_PORT_VALUE="$(read_env_value "HOST_PORT" "${INSTALL_DIR}/${COMPOSE_ENV_FILE}")"
   HOST_PORT_VALUE="${HOST_PORT_VALUE:-3000}"
