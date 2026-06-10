@@ -36,21 +36,21 @@ ENV NODE_ENV=production \
   DATABASE_URL=/app/data/link-guide.sqlite
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates \
+  && apt-get install -y --no-install-recommends ca-certificates gosu \
   && rm -rf /var/lib/apt/lists/* \
   && groupadd --system --gid 1001 nodejs \
   && useradd --system --uid 1001 --gid nodejs nextjs \
   && mkdir -p /app/data /app/src/lib \
   && chown -R nextjs:nodejs /app/data
 
+COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/src/lib/schema.sql ./src/lib/schema.sql
 
-USER nextjs
-
 EXPOSE 3000
 VOLUME ["/app/data"]
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "server.js"]
