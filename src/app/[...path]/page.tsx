@@ -45,7 +45,8 @@ export default async function Page({ params }: { params: Promise<{ path: string[
     const ip = headersList.get('x-forwarded-for') || 'unknown';
     const userAgent = headersList.get('user-agent') || '';
     const referrer = headersList.get('referer') || '';
-    createStat(link.id, ip, userAgent, referrer);
+    const country = headersList.get('cf-ipcountry') || headersList.get('x-vercel-ip-country') || undefined;
+    createStat(link.id, ip, userAgent, referrer, country);
   }
 
   if (link.mode === 'simple') {

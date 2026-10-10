@@ -1,11 +1,12 @@
 import { AppSidebar } from "@/components/appSidebar"
 import { ChartAreaInteractive } from "@/components/chartAreaInteractive"
+import { StatsBreakdownCards } from "@/components/statsBreakdownCards"
 import { TopLinksTable } from "@/components/topLinksTable"
 import { SectionCards } from "@/components/sectionCards"
 import { SiteHeader } from "@/components/siteHeader"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { auth } from "@/lib/auth"
-import { getAllLinks, getLinksByUserId, getAllStatsGroupedByDate, getStatsGroupedByDateForUser } from "@/lib/db"
+import { getAllLinks, getLinksByUserId, getAllStatsGroupedByDate, getStatsGroupedByDateForUser, getStatsBreakdown } from "@/lib/db"
 import { redirect } from "next/navigation"
 
 export const runtime = 'nodejs';
@@ -21,6 +22,8 @@ export default async function Page() {
   const statsData = session.user.role === 'admin'
     ? getAllStatsGroupedByDate()
     : getStatsGroupedByDateForUser(parseInt(session.user.id))
+
+  const breakdown = getStatsBreakdown(session.user.role === 'admin' ? undefined : parseInt(session.user.id))
 
   return (
     <SidebarProvider
@@ -41,6 +44,7 @@ export default async function Page() {
               <div className="px-4 lg:px-6">
                 <ChartAreaInteractive data={statsData} />
               </div>
+              <StatsBreakdownCards data={breakdown} />
               <TopLinksTable links={links} />
             </div>
           </div>

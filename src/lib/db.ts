@@ -543,6 +543,58 @@ export function getStatsGroupedByDateForUser(userId: number, days: number = 90) 
   `).all(userId, days) as StatsByDateRow[];
 }
 
+export interface StatsBreakdown {
+  referrers: { label: string; count: number }[];
+  countries: { label: string; count: number }[];
+  browsers: { label: string; count: number }[];
+}
+
+function browserFromUserAgent(ua: string): string {
+  if (!ua) return 'Unknown';
+  if (/bot|crawl|spider|slurp|preview/i.test(ua)) return 'Bot';
+  if (/edg\//i.test(ua)) return 'Edge';
+  if (/opr\/|opera/i.test(ua)) return 'Opera';
+  if (/firefox|fxios/i.test(ua)) return 'Firefox';
+  if (/chrome|crios/i.test(ua)) return 'Chrome';
+  if (/safari/i.test(ua)) return 'Safari';
+  return 'Other';
+}
+
+function referrerHost(ref: string): string {
+  if (!ref) return 'Direct';
+  try { return new URL(ref).hostname; } catch { return 'Direct'; }
+}
+
+function topN(counts: Map<string, number>, n = 5) {
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, n)
+    .map(([label, count]) => ({ label, count }));
+}
+
+// Breakdown of visits by referrer, country and browser. Pass a userId to scope to that user's links.
+export function getStatsBreakdown(userId?: number, days: number = 90): StatsBreakdown {
+  const rows = getDb().prepare(`
+    SELECT s.user_agent, s.referrer, s.country
+    FROM stats s
+    JOIN links l ON s.link_id = l.id
+    WHERE s.visited_at >= datetime('now', '-' || ? || ' days')
+      AND (? IS NULL OR l.user_id = ?)
+  `).all(days, userId ?? null, userId ?? null) as { user_agent: string | null; referrer: string | null; country: string | null }[];
+
+  const referrers = new Map<string, number>();
+  const countries = new Map<string, number>();
+  const browsers = new Map<string, number>();
+  const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) || 0) + 1);
+
+  for (const r of rows) {
+    bump(referrers, referrerHost(r.referrer || ''));
+    bump(countries, r.country || 'Unknown');
+    bump(browsers, browserFromUserAgent(r.user_agent || ''));
+  }
+  return { referrers: topN(referrers), countries: topN(countries), browsers: topN(browsers) };
+}
+
 // Blacklist
 export function getAllBlacklist() {
   return getDb().prepare('SELECT * FROM blacklist ORDER BY created_at DESC').all();
