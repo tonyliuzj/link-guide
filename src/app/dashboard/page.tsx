@@ -1,6 +1,6 @@
 import { AppSidebar } from "@/components/appSidebar"
 import { ChartAreaInteractive } from "@/components/chartAreaInteractive"
-import { DataTable } from "@/components/dataTable"
+import { TopLinksTable } from "@/components/topLinksTable"
 import { SectionCards } from "@/components/sectionCards"
 import { SiteHeader } from "@/components/siteHeader"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
@@ -22,16 +22,6 @@ export default async function Page() {
     ? getAllStatsGroupedByDate()
     : getStatsGroupedByDateForUser(parseInt(session.user.id))
 
-  const tableData = links.map((link) => ({
-    id: link.id,
-    header: link.short_code,
-    type: link.mode.replace("_", " "),
-    status: link.expires_at && new Date(link.expires_at) < new Date() ? "Expired" : "Done",
-    target: String(link.click_count ?? 0),
-    limit: link.destination_url,
-    reviewer: link.owner_name || "Guest",
-  }))
-
   return (
     <SidebarProvider
       style={
@@ -51,7 +41,7 @@ export default async function Page() {
               <div className="px-4 lg:px-6">
                 <ChartAreaInteractive data={statsData} />
               </div>
-              <DataTable data={tableData} />
+              <TopLinksTable links={links} />
             </div>
           </div>
         </div>

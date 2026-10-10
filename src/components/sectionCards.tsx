@@ -14,7 +14,7 @@ import { TrendingUpIcon } from "lucide-react"
 export function SectionCards({ data = [] }: { data?: any[] }) {
   const totalLinks = data.length
   const totalClicks = data.reduce((sum, link) => sum + (link.click_count || 0), 0)
-  const activeLinks = data.filter(link => link.mode === 'active').length
+  const activeLinks = data.filter(link => !link.expires_at || new Date(link.expires_at) >= new Date()).length
   const avgClicksPerLink = totalLinks > 0 ? (totalClicks / totalLinks).toFixed(1) : '0'
 
   return (
@@ -68,7 +68,7 @@ export function SectionCards({ data = [] }: { data?: any[] }) {
           </CardAction>
         </CardHeader>
         <CardFooter className="flex-col items-start gap-1.5 text-sm">
-          <div className="text-muted-foreground">Currently active</div>
+          <div className="text-muted-foreground">Not expired</div>
         </CardFooter>
       </Card>
       <Card className="@container/card">
