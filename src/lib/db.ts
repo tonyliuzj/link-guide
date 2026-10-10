@@ -276,6 +276,22 @@ export function updatePassword(id: number, passwordHash: string) {
   return getDb().prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, id);
 }
 
+// Password resets
+export function createPasswordReset(userId: number, tokenHash: string, expiresAt: string) {
+  const database = getDb();
+  database.prepare("DELETE FROM password_resets WHERE user_id = ? OR expires_at < datetime('now')").run(userId);
+  return database.prepare('INSERT INTO password_resets (user_id, token_hash, expires_at) VALUES (?, ?, ?)').run(userId, tokenHash, expiresAt);
+}
+
+export function getValidPasswordReset(tokenHash: string) {
+  return getDb().prepare("SELECT * FROM password_resets WHERE token_hash = ? AND expires_at > datetime('now')").get(tokenHash) as
+    { id: number; user_id: number } | undefined;
+}
+
+export function deletePasswordResetsForUser(userId: number) {
+  return getDb().prepare('DELETE FROM password_resets WHERE user_id = ?').run(userId);
+}
+
 // Domains
 export function createDomain(
   domain: string,

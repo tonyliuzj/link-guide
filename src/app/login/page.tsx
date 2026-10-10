@@ -1,5 +1,6 @@
 import { LoginForm } from "@/components/loginForm"
 import { getSiteSettings } from "@/lib/db"
+import { isMailConfigured } from "@/lib/mail"
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -17,6 +18,7 @@ export default function Page() {
         <LoginForm
           turnstileSiteKey={settings?.turnstile_site_key || ""}
           turnstileRequired={settings?.turnstile_login === 1}
+          showForgotPassword={isMailConfigured()}
         />
       </div>
     </div>

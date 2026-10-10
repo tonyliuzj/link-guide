@@ -25,11 +25,13 @@ import { TurnstileWidget } from "@/components/turnstileWidget"
 export function LoginForm({
   turnstileSiteKey,
   turnstileRequired = false,
+  showForgotPassword = false,
   className,
   ...props
 }: React.ComponentProps<"div"> & {
   turnstileSiteKey?: string
   turnstileRequired?: boolean
+  showForgotPassword?: boolean
 }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
@@ -90,7 +92,14 @@ export function LoginForm({
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor="password">Password</FieldLabel>
+                <div className="flex items-center">
+                  <FieldLabel htmlFor="password">Password</FieldLabel>
+                  {showForgotPassword && (
+                    <Link href="/forgot-password" className="ml-auto text-sm underline-offset-4 hover:underline">
+                      Forgot your password?
+                    </Link>
+                  )}
+                </div>
                 <Input id="password" name="password" type="password" required />
               </Field>
               {turnstileRequired && turnstileSiteKey && (

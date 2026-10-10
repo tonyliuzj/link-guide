@@ -192,6 +192,10 @@ proxy_set_header X-Forwarded-Host $host;
 proxy_set_header X-Forwarded-Proto $scheme;
 ```
 
+### Password Reset Email
+
+"Forgot your password?" appears on the login page once SMTP is configured in `.env.local` (`SMTP_HOST`, `SMTP_FROM`, and optionally `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_SECURE`). Reset links expire after 1 hour and use `APP_URL`, or the site domain from settings, as their base address.
+
 ### Turnstile Bot Protection
 
 Cloudflare Turnstile is configured per-domain in the dashboard (not in .env):
