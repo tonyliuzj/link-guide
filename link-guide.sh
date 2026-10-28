@@ -275,9 +275,10 @@ check_required_commands() {
 # Repository functions
 # ============================================================
 
-# Fast-forward to the latest code. package-lock.json is regenerated on the server (npm rewrites it,
-# and this script may refresh it), so a local edit to it must never block an update; anything else
-# modified locally is reported instead of being overwritten.
+# Fast-forward to the latest code without ever failing on local changes. package-lock.json is
+# regenerated on the server (npm rewrites it, and this script may refresh it), so local edits to it
+# are discarded. Any other locally modified tracked file is stashed, not lost: restore it afterwards
+# with `git stash pop`.
 pull_latest_code() {
   local dirty
 
@@ -288,10 +289,10 @@ pull_latest_code() {
 
   dirty="$(git status --porcelain --untracked-files=no)"
   if [ -n "$dirty" ]; then
-    echo "Local changes would be overwritten by the update:"
+    echo "Stashing other local changes so the update can proceed:"
     echo "$dirty"
-    echo "Commit, stash (git stash) or discard them in ${INSTALL_DIR}, then run the update again."
-    exit 1
+    git -c user.name=link-guide -c user.email=link-guide@localhost stash push --message "link-guide update $(date +%Y-%m-%dT%H:%M:%S)" >/dev/null
+    echo "Your changes are saved. Restore them later with: git -C ${INSTALL_DIR} stash pop"
   fi
 
   git pull --ff-only
