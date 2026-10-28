@@ -1,5 +1,6 @@
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
+import { CredentialsSignin } from "next-auth"
 import { compare } from "bcryptjs"
 import { normalizeDomain } from "@/lib/domainUtils"
 import { getRequestIp, verifyTurnstileToken } from "@/lib/turnstile"
@@ -22,6 +23,11 @@ async function getConfiguredSiteOrigin() {
   } catch {
     return null
   }
+}
+
+// Surfaced to the login form (as `code`) only after the correct password was supplied.
+class EmailNotVerifiedError extends CredentialsSignin {
+  code = "email_not_verified"
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -71,6 +77,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null
         }
 
+        if (user.email_verified !== 1) {
+          throw new EmailNotVerifiedError()
+        }
+
         resetRateLimit(emailKey)
 
         return {
@@ -114,7 +124,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const { getUserSessionInfo } = await import("@/lib/db")
       const info = getUserSessionInfo(Number(token.sub))
       if (!info) return null
-      if (typeof token.iat === "number" && info.session_valid_after > token.iat) {
+      if (typeof token.iat === "number" && info.session_valid_after >= token.iat) {
         return null
       }
       token.role = info.role

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { updateUser, updatePassword, getUserById, getUserByEmail } from "@/lib/db"
+import { updateUser, updatePassword, invalidateUserSessions, getUserById, getUserByEmail } from "@/lib/db"
 import { hash, compare } from "bcryptjs"
 import { rateLimit } from "@/lib/rateLimit"
 import { isValidEmail, isValidPassword } from "@/lib/validation"
@@ -48,6 +48,8 @@ export async function PUT(req: NextRequest) {
 
     const passwordHash = await hash(body.newPassword, 10)
     updatePassword(userId, passwordHash)
+    invalidateUserSessions(userId)
+    return NextResponse.json({ success: true, signedOut: true })
   }
 
   return NextResponse.json({ success: true })

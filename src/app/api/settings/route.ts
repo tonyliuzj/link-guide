@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { getSiteSettings, updateSiteSettings } from "@/lib/db"
+import { getSiteSettings, purgeOldStats, updateSiteSettings } from "@/lib/db"
 
 export const runtime = 'nodejs';
 
@@ -32,6 +32,15 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: "Turnstile site key and secret key are required before enabling verification" }, { status: 400 })
   }
 
+  let statsRetentionDays: number | undefined
+  if (body.statsRetentionDays !== undefined) {
+    const days = Number(body.statsRetentionDays)
+    if (!Number.isInteger(days) || days < 0 || days > 3650) {
+      return NextResponse.json({ error: "Statistics retention must be a whole number of days between 0 and 3650" }, { status: 400 })
+    }
+    statsRetentionDays = days
+  }
+
   updateSiteSettings(
     body.siteTitle,
     body.siteDomain,
@@ -39,8 +48,10 @@ export async function PUT(req: NextRequest) {
     body.turnstileSecretKey,
     body.turnstileLandingCreate,
     body.turnstileLogin,
-    body.turnstileSignup
+    body.turnstileSignup,
+    statsRetentionDays
   )
+  purgeOldStats(true)
 
   return NextResponse.json({ success: true })
 }

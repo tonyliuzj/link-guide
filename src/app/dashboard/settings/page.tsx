@@ -11,7 +11,7 @@ import { Switch } from "@/components/ui/switch"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useState, useEffect } from "react"
 import { toast } from "sonner"
-import { useSession } from "next-auth/react"
+import { signOut, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { normalizeDomain } from "@/lib/domainUtils"
 import type { SiteSettings } from "@/types/models"
@@ -20,6 +20,7 @@ export default function Page() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [restoring, setRestoring] = useState(false)
   const [settings, setSettings] = useState<SiteSettings | null>(null)
   const [turnstileLandingCreate, setTurnstileLandingCreate] = useState(false)
   const [turnstileLogin, setTurnstileLogin] = useState(false)
@@ -52,6 +53,34 @@ export default function Page() {
       })
   }, [])
 
+  async function handleRestore(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const form = e.currentTarget
+    const file = new FormData(form).get("file")
+    if (!(file instanceof File) || file.size === 0) {
+      toast.error("Choose a backup file first")
+      return
+    }
+    if (!window.confirm("Restore this backup? It replaces ALL current data (users, domains, links and statistics). The previous database is kept on the server as a .pre-restore file.")) {
+      return
+    }
+
+    setRestoring(true)
+    const body = new FormData()
+    body.set("file", file)
+    body.set("confirm", "RESTORE")
+    const res = await fetch("/api/backup", { method: "POST", body })
+
+    if (res.ok) {
+      toast.success("Backup restored. Please log in again.")
+      await signOut({ callbackUrl: "/login" })
+    } else {
+      const data = await res.json().catch(() => ({}))
+      toast.error(data.error || "Restore failed")
+      setRestoring(false)
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setLoading(true)
@@ -68,6 +97,7 @@ export default function Page() {
         turnstileLandingCreate,
         turnstileLogin,
         turnstileSignup,
+        statsRetentionDays: Number(formData.get("statsRetentionDays") || 0),
       }),
     })
 
@@ -152,6 +182,18 @@ export default function Page() {
                     required
                   />
                 </div>
+                <div>
+                  <Label htmlFor="statsRetentionDays">Keep click statistics for (days)</Label>
+                  <Input
+                    id="statsRetentionDays"
+                    name="statsRetentionDays"
+                    type="number"
+                    min={0}
+                    max={3650}
+                    defaultValue={settings.stats_retention_days ?? 0}
+                  />
+                  <div className="text-sm text-muted-foreground mt-1">Older click records are deleted automatically. Use 0 to keep them forever.</div>
+                </div>
             </CardContent>
           </Card>
 
@@ -197,6 +239,29 @@ export default function Page() {
                   {loading ? "Saving..." : "Save Changes"}
                 </Button>
                 </form>
+
+                <Card className="mt-6">
+                  <CardHeader>
+                    <CardTitle>Backup & Restore</CardTitle>
+                    <CardDescription>
+                      A backup contains every user, domain, link and statistic, including password hashes and secret keys. Keep it private.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div>
+                      <Button type="button" variant="outline" onClick={() => { window.location.href = "/api/backup" }}>
+                        Download backup
+                      </Button>
+                    </div>
+                    <form onSubmit={handleRestore} className="space-y-3">
+                      <Label htmlFor="file">Restore from a backup file</Label>
+                      <Input id="file" name="file" type="file" accept=".sqlite,.db,application/vnd.sqlite3" />
+                      <Button type="submit" variant="destructive" disabled={restoring}>
+                        {restoring ? "Restoring..." : "Restore backup"}
+                      </Button>
+                    </form>
+                  </CardContent>
+                </Card>
               </div>
             </div>
           </div>

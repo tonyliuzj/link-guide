@@ -199,6 +199,16 @@ Client IPs (used for rate limiting and click stats) are read from `CF-Connecting
 
 "Forgot your password?" appears on the login page once SMTP is configured in `.env.local` (`SMTP_HOST`, `SMTP_FROM`, and optionally `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_SECURE`). Reset links expire after 1 hour and use `APP_URL`, or the site domain from settings, as their base address.
 
+When SMTP is configured, new self-service signups must also confirm their email address (the link expires after 24 hours) before they can log in. Accounts created before SMTP was configured, by an admin, or during setup are treated as verified. Without SMTP, signups work as before.
+
+### Backup, Restore and Statistics
+
+Under **Settings → Backup & Restore**, admins can download a snapshot of the whole database and restore one from a file. A restore replaces all current data and keeps the previous database next to it as `<database file>.pre-restore`. Backups contain password hashes and Turnstile secret keys, so store them privately.
+
+Settings also has **Keep click statistics for (days)**; older click records are deleted automatically (0 keeps everything). Each link's edit page has an **Export clicks (CSV)** button.
+
+Rate limits for login, signup, password reset and other sensitive endpoints are stored in the database, so they survive restarts.
+
 ### Turnstile Bot Protection
 
 Cloudflare Turnstile is configured per-domain in the dashboard (not in .env):

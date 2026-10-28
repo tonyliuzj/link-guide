@@ -7,6 +7,7 @@ export type User = {
   password_hash: string;
   role: UserRole;
   session_valid_after: number;
+  email_verified: number;
   created_at: string;
 };
 
@@ -57,4 +58,5 @@ export type SiteSettings = {
   turnstile_landing_create: number;
   turnstile_login: number;
   turnstile_signup: number;
+  stats_retention_days: number;
 };

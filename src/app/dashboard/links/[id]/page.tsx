@@ -304,6 +304,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
 
                 <div className="flex gap-2">
                   <Button type="submit" disabled={loading}>{loading ? "Saving..." : "Save Changes"}</Button>
+                  <Button type="button" variant="outline" onClick={() => { window.location.href = `/api/links/${id}/export` }}>Export clicks (CSV)</Button>
                   <Button type="button" variant="destructive" onClick={() => setDeleteDialogOpen(true)}>Delete Link</Button>
                 </div>
                 </form>

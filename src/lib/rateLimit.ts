@@ -1,32 +1,33 @@
-// In-memory fixed-window rate limiter. State is per process, which fits the single-instance SQLite deployment.
-type Bucket = { count: number; resetAt: number };
+import { getDb } from '@/lib/db';
 
-const buckets = new Map<string, Bucket>();
-const MAX_BUCKETS = 10_000;
-
-function prune(now: number) {
-  for (const [key, bucket] of buckets) {
-    if (bucket.resetAt <= now) buckets.delete(key);
-  }
-}
+// Fixed-window rate limiter backed by SQLite, so limits survive restarts and are shared by every
+// process using the same database file.
+const PRUNE_INTERVAL_MS = 10 * 60 * 1000;
+let lastPrune = 0;
 
 export function rateLimit(key: string, limit: number, windowMs: number) {
+  const db = getDb();
   const now = Date.now();
-  if (buckets.size >= MAX_BUCKETS) prune(now);
 
-  let bucket = buckets.get(key);
-  if (!bucket || bucket.resetAt <= now) {
-    bucket = { count: 0, resetAt: now + windowMs };
-    buckets.set(key, bucket);
+  if (now - lastPrune > PRUNE_INTERVAL_MS) {
+    lastPrune = now;
+    db.prepare('DELETE FROM rate_limits WHERE reset_at <= ?').run(now);
   }
 
-  bucket.count += 1;
+  const row = db.prepare(`
+    INSERT INTO rate_limits (key, count, reset_at) VALUES (?, 1, ?)
+    ON CONFLICT(key) DO UPDATE SET
+      count = CASE WHEN reset_at <= ? THEN 1 ELSE count + 1 END,
+      reset_at = CASE WHEN reset_at <= ? THEN ? ELSE reset_at END
+    RETURNING count, reset_at
+  `).get(key, now + windowMs, now, now, now + windowMs) as { count: number; reset_at: number };
+
   return {
-    ok: bucket.count <= limit,
-    retryAfter: Math.max(1, Math.ceil((bucket.resetAt - now) / 1000)),
+    ok: row.count <= limit,
+    retryAfter: Math.max(1, Math.ceil((row.reset_at - now) / 1000)),
   };
 }
 
 export function resetRateLimit(key: string) {
-  buckets.delete(key);
+  getDb().prepare('DELETE FROM rate_limits WHERE key = ?').run(key);
 }

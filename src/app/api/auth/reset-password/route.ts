@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { createHash } from 'crypto';
+import { hashToken } from '@/lib/tokens';
 import { hash } from 'bcryptjs';
 import { rateLimit } from '@/lib/rateLimit';
 import { isValidPassword } from '@/lib/validation';
 import { getRequestIp } from '@/lib/turnstile';
-import { deletePasswordResetsForUser, getValidPasswordReset, invalidateUserSessions, updatePassword } from '@/lib/db';
+import { deletePasswordResetsForUser, getValidPasswordReset, invalidateUserSessions, markEmailVerified, updatePassword } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Password must be 8 to 128 characters' }, { status: 400 });
   }
 
-  const reset = getValidPasswordReset(createHash('sha256').update(token).digest('hex'));
+  const reset = getValidPasswordReset(hashToken(token));
   if (!reset) {
     return NextResponse.json({ error: 'This reset link is invalid or has expired' }, { status: 400 });
   }
@@ -35,5 +35,7 @@ export async function POST(request: Request) {
   updatePassword(reset.user_id, await hash(password, 10));
   deletePasswordResetsForUser(reset.user_id);
   invalidateUserSessions(reset.user_id);
+  // Receiving the reset email proves the address is theirs.
+  markEmailVerified(reset.user_id);
   return NextResponse.json({ success: true });
 }

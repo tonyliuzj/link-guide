@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
 import { hash } from 'bcryptjs';
-import { createUser, getSiteSettings } from '@/lib/db';
+import { createEmailVerification, createUser, getSiteSettings, getUserByEmail } from '@/lib/db';
+import { getAppBaseUrl, isMailConfigured } from '@/lib/mail';
+import { sendVerificationEmail } from '@/lib/verificationMail';
+import { createToken, tokenExpiry } from '@/lib/tokens';
 import { getRequestIp, verifyTurnstileToken } from '@/lib/turnstile';
 import { rateLimit } from '@/lib/rateLimit';
 import { isValidEmail, isValidPassword } from '@/lib/validation';
+
+const VERIFICATION_TTL_MS = 24 * 60 * 60 * 1000;
 
 export async function POST(request: Request) {
   const limit = rateLimit(`signup:ip:${getRequestIp(request.headers) || 'unknown'}`, 10, 60 * 60 * 1000);
@@ -43,8 +48,20 @@ export async function POST(request: Request) {
 
   try {
     const passwordHash = await hash(password, 10);
-    createUser(email, passwordHash, 'user');
-    return NextResponse.json({ success: true });
+    // With SMTP configured, new accounts must confirm their address before they can log in.
+    const verificationRequired = isMailConfigured();
+    createUser(email, passwordHash, 'user', !verificationRequired);
+
+    if (verificationRequired) {
+      const user = getUserByEmail(email);
+      if (user) {
+        const { token, tokenHash } = createToken();
+        createEmailVerification(user.id, tokenHash, tokenExpiry(VERIFICATION_TTL_MS));
+        sendVerificationEmail(user.email, `${getAppBaseUrl(request)}/verify-email?token=${token}`);
+      }
+    }
+
+    return NextResponse.json({ success: true, verificationRequired });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     if (message.includes('UNIQUE constraint failed')) {

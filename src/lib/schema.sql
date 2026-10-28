@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS settings (
   turnstile_secret_key TEXT,
   turnstile_landing_create INTEGER NOT NULL DEFAULT 0,
   turnstile_login INTEGER NOT NULL DEFAULT 0,
-  turnstile_signup INTEGER NOT NULL DEFAULT 0
+  turnstile_signup INTEGER NOT NULL DEFAULT 0,
+  stats_retention_days INTEGER NOT NULL DEFAULT 0
 );
 
 -- Users table
@@ -18,6 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('admin', 'user')),
   session_valid_after INTEGER NOT NULL DEFAULT 0,
+  email_verified INTEGER NOT NULL DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -28,6 +30,22 @@ CREATE TABLE IF NOT EXISTS password_resets (
   token_hash TEXT NOT NULL UNIQUE,
   expires_at DATETIME NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Email verification tokens for self-service signups (only the SHA-256 hash is stored)
+CREATE TABLE IF NOT EXISTS email_verifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at DATETIME NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Rate limit counters (fixed windows, reset_at is a unix timestamp in milliseconds)
+CREATE TABLE IF NOT EXISTS rate_limits (
+  key TEXT PRIMARY KEY,
+  count INTEGER NOT NULL,
+  reset_at INTEGER NOT NULL
 );
 
 -- Domains table

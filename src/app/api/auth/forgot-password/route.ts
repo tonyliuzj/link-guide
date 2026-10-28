@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
-import { createHash, randomBytes } from 'crypto';
-import { createPasswordReset, getSiteSettings, getUserByEmail } from '@/lib/db';
-import { isMailConfigured, sendMail } from '@/lib/mail';
-import { normalizeDomain } from '@/lib/domainUtils';
+import { createPasswordReset, getUserByEmail } from '@/lib/db';
+import { getAppBaseUrl, isMailConfigured, sendMail } from '@/lib/mail';
+import { createToken, tokenExpiry } from '@/lib/tokens';
 import { rateLimit } from '@/lib/rateLimit';
 import { getRequestIp } from '@/lib/turnstile';
 
@@ -13,18 +12,6 @@ const IP_LIMIT = 5;
 const EMAIL_LIMIT = 3;
 const IP_WINDOW_MS = 15 * 60 * 1000;
 const EMAIL_WINDOW_MS = 60 * 60 * 1000;
-
-function getBaseUrl(request: Request) {
-  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/+$/, '');
-
-  // Prefer the configured site domain so a spoofed Host header cannot poison the emailed link.
-  const domain = normalizeDomain(getSiteSettings()?.site_domain || '');
-  if (domain) {
-    const local = domain.startsWith('localhost') || domain.startsWith('127.0.0.1');
-    return `${local ? 'http' : 'https'}://${domain}`;
-  }
-  return new URL(request.url).origin;
-}
 
 export async function POST(request: Request) {
   if (!isMailConfigured()) {
@@ -50,12 +37,10 @@ export async function POST(request: Request) {
   const emailLimit = rateLimit(`forgot:email:${email.toLowerCase()}`, EMAIL_LIMIT, EMAIL_WINDOW_MS);
   const user = emailLimit.ok ? getUserByEmail(email) : undefined;
   if (user && user.id !== 0) {
-    const token = randomBytes(32).toString('hex');
-    const tokenHash = createHash('sha256').update(token).digest('hex');
-    const expiresAt = new Date(Date.now() + TOKEN_TTL_MS).toISOString().replace('T', ' ').slice(0, 19);
-    createPasswordReset(user.id, tokenHash, expiresAt);
+    const { token, tokenHash } = createToken();
+    createPasswordReset(user.id, tokenHash, tokenExpiry(TOKEN_TTL_MS));
 
-    const link = `${getBaseUrl(request)}/reset-password?token=${token}`;
+    const link = `${getAppBaseUrl(request)}/reset-password?token=${token}`;
     // Not awaited: delivery time must not reveal whether the address belongs to an account.
     sendMail(
       user.email,

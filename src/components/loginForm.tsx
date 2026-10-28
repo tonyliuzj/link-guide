@@ -35,9 +35,20 @@ export function LoginForm({
 }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [unverifiedEmail, setUnverifiedEmail] = useState("")
+  const [resent, setResent] = useState(false)
   const [turnstileToken, setTurnstileToken] = useState("")
   const [turnstileKey, setTurnstileKey] = useState(0)
   const router = useRouter()
+
+  async function handleResend() {
+    await fetch("/api/auth/resend-verification", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: unverifiedEmail }),
+    })
+    setResent(true)
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -60,7 +71,8 @@ export function LoginForm({
     })
 
     if (result?.error) {
-      setError("Invalid email or password")
+      setUnverifiedEmail(result.code === "email_not_verified" ? String(formData.get("email")) : "")
+      setError(result.code === "email_not_verified" ? "Please verify your email address before logging in." : "Invalid email or password")
       setTurnstileToken("")
       setTurnstileKey((key) => key + 1)
       setLoading(false)
@@ -110,6 +122,13 @@ export function LoginForm({
                 />
               )}
               {error && <div className="text-sm text-red-500">{error}</div>}
+              {unverifiedEmail && (
+                resent ? (
+                  <div className="text-sm text-muted-foreground">If that account is unverified, a new verification email is on its way.</div>
+                ) : (
+                  <Button type="button" variant="outline" onClick={handleResend}>Resend verification email</Button>
+                )
+              )}
               <Field>
                 <Button type="submit" disabled={loading || (turnstileRequired && !turnstileToken)}>
                   {loading ? "Logging in..." : "Login"}

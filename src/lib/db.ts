@@ -1,12 +1,21 @@
 import Database from 'better-sqlite3';
-import { readFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, existsSync, mkdirSync, copyFileSync, rmSync } from 'fs';
 import { join, dirname } from 'path';
 import { createHash } from 'crypto';
+import { normalizeEmail } from './validation';
 import { getHostnameCandidates, normalizeBasePath, normalizeDomain } from './domainUtils';
 import type { BlacklistItem, Domain, Link, SiteSettings, User, UserListItem } from '@/types/models';
 
 const DB_PATH = process.env.DATABASE_URL || './data/linkguide.db';
-let db: Database.Database | null = null;
+// Next.js can load this module once per route bundle, so the connection lives on globalThis:
+// every bundle then sees the same handle, including after a restore swaps the database file.
+const globalState = globalThis as typeof globalThis & { __linkGuideDb?: Database.Database | null };
+function getHandle() {
+  return globalState.__linkGuideDb ?? null;
+}
+function setHandle(handle: Database.Database | null) {
+  globalState.__linkGuideDb = handle;
+}
 
 type StatsByDateRow = { date: string; count: number };
 export type LinkListRow = {
@@ -22,6 +31,7 @@ export type LinkListRow = {
 };
 
 export function getDb() {
+  let db = getHandle();
   if (!db) {
     const dbDir = dirname(DB_PATH);
     if (!existsSync(dbDir)) {
@@ -30,38 +40,99 @@ export function getDb() {
     db = new Database(DB_PATH);
     db.pragma('foreign_keys = ON');
     db.pragma('journal_mode = WAL');
-    initDb();
+    setHandle(db);
+    initDb(db);
   }
   return db;
 }
 
-function initDb() {
+// Writes a consistent snapshot of the live database to destPath.
+export async function backupDatabase(destPath: string) {
+  await getDb().backup(destPath);
+}
+
+const REQUIRED_RESTORE_TABLES = ['users', 'domains', 'links', 'stats', 'settings'];
+
+// Checks that a file is a usable LinkGuide database before it replaces the live one.
+export function validateBackupFile(filePath: string) {
+  let candidate: Database.Database | null = null;
+  try {
+    candidate = new Database(filePath, { readonly: true, fileMustExist: true });
+    const integrity = candidate.pragma('integrity_check', { simple: true });
+    if (integrity !== 'ok') return 'The file is corrupted';
+
+    const tables = new Set((candidate.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as Array<{ name: string }>).map((row) => row.name));
+    const missing = REQUIRED_RESTORE_TABLES.filter((table) => !tables.has(table));
+    if (missing.length > 0) return `Not a LinkGuide database (missing: ${missing.join(', ')})`;
+
+    const admins = candidate.prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'admin'").get() as { count: number };
+    if (admins.count === 0) return 'The backup has no admin user, so nobody could log in after restoring it';
+
+    return null;
+  } catch {
+    return 'The file is not a valid SQLite database';
+  } finally {
+    candidate?.close();
+  }
+}
+
+// Replaces the live database with a validated backup. The previous database is kept next to it as
+// `<name>.pre-restore`. The new file is opened (and migrated) on the next request.
+export function restoreDatabase(uploadedPath: string) {
+  const database = getDb();
+  database.pragma('wal_checkpoint(TRUNCATE)');
+  database.close();
+  setHandle(null);
+
+  const previousPath = `${DB_PATH}.pre-restore`;
+  try {
+    copyFileSync(DB_PATH, previousPath);
+    rmSync(`${DB_PATH}-wal`, { force: true });
+    rmSync(`${DB_PATH}-shm`, { force: true });
+    copyFileSync(uploadedPath, DB_PATH);
+    getDb();
+  } catch (error) {
+    // Put the previous database back so a failed restore never leaves the app without data.
+    getHandle()?.close();
+    setHandle(null);
+    if (existsSync(previousPath)) copyFileSync(previousPath, DB_PATH);
+    throw error;
+  }
+}
+
+function initDb(db: Database.Database) {
   migrateSetupTableToSettings();
   migrateAddSecurityFields();
 
   const schema = readFileSync(join(process.cwd(), 'src', 'lib', 'schema.sql'), 'utf-8');
-  db!.exec(schema);
+  db.exec(schema);
 
-  const settings = db!.prepare('SELECT * FROM settings WHERE id = 1').get();
+  const settings = db.prepare('SELECT * FROM settings WHERE id = 1').get();
   if (!settings) {
-    db!.prepare('INSERT INTO settings (id, is_completed) VALUES (1, 0)').run();
+    db.prepare('INSERT INTO settings (id, is_completed) VALUES (1, 0)').run();
   }
 
   // Create guest user (id=0) for guest-created links
   try {
-    db!.exec(`INSERT INTO users (id, email, password_hash, role) VALUES (0, 'guest@system', '', 'user')`);
+    db.exec(`INSERT INTO users (id, email, password_hash, role) VALUES (0, 'guest@system', '', 'user')`);
   } catch {
     // Guest user already exists
   }
 
   // Add site settings columns to settings table
   try {
-    db!.exec(`ALTER TABLE settings ADD COLUMN site_title TEXT DEFAULT 'LinkGuide'`);
+    db.exec(`ALTER TABLE settings ADD COLUMN site_title TEXT DEFAULT 'LinkGuide'`);
   } catch {
     // Column already exists
   }
   try {
-    db!.exec(`ALTER TABLE settings ADD COLUMN site_domain TEXT`);
+    db.exec(`ALTER TABLE settings ADD COLUMN site_domain TEXT`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    db.exec(`ALTER TABLE settings ADD COLUMN stats_retention_days INTEGER NOT NULL DEFAULT 0`);
   } catch {
     // Column already exists
   }
@@ -70,51 +141,60 @@ function initDb() {
 
   // Add session invalidation column to users table
   try {
-    db!.exec(`ALTER TABLE users ADD COLUMN session_valid_after INTEGER NOT NULL DEFAULT 0`);
+    db.exec(`ALTER TABLE users ADD COLUMN session_valid_after INTEGER NOT NULL DEFAULT 0`);
+  } catch {
+    // Column already exists
+  }
+
+  migrateEmailsToLowercase();
+
+  // Existing accounts predate email verification, so they default to verified
+  try {
+    db.exec(`ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 1`);
   } catch {
     // Column already exists
   }
 
   // Add missing columns to domains table
   try {
-    db!.exec(`ALTER TABLE domains ADD COLUMN allow_guest_create INTEGER NOT NULL DEFAULT 0`);
+    db.exec(`ALTER TABLE domains ADD COLUMN allow_guest_create INTEGER NOT NULL DEFAULT 0`);
   } catch {
     // Column already exists
   }
   try {
-    db!.exec(`ALTER TABLE domains ADD COLUMN turnstile_site_key TEXT`);
+    db.exec(`ALTER TABLE domains ADD COLUMN turnstile_site_key TEXT`);
   } catch {
     // Column already exists
   }
   try {
-    db!.exec(`ALTER TABLE domains ADD COLUMN turnstile_secret_key TEXT`);
+    db.exec(`ALTER TABLE domains ADD COLUMN turnstile_secret_key TEXT`);
   } catch {
     // Column already exists
   }
   try {
-    db!.exec(`ALTER TABLE domains ADD COLUMN base_response TEXT NOT NULL DEFAULT '404'`);
+    db.exec(`ALTER TABLE domains ADD COLUMN base_response TEXT NOT NULL DEFAULT '404'`);
   } catch {
     // Column already exists
   }
   try {
-    db!.exec(`ALTER TABLE domains ADD COLUMN base_redirect_url TEXT`);
+    db.exec(`ALTER TABLE domains ADD COLUMN base_redirect_url TEXT`);
   } catch {
     // Column already exists
   }
 
   // Add missing columns to links table
   try {
-    db!.exec(`ALTER TABLE links ADD COLUMN turnstile_enabled INTEGER NOT NULL DEFAULT 0`);
+    db.exec(`ALTER TABLE links ADD COLUMN turnstile_enabled INTEGER NOT NULL DEFAULT 0`);
   } catch {
     // Column already exists
   }
   try {
-    db!.exec(`ALTER TABLE links ADD COLUMN redirect_delay INTEGER NOT NULL DEFAULT 0`);
+    db.exec(`ALTER TABLE links ADD COLUMN redirect_delay INTEGER NOT NULL DEFAULT 0`);
   } catch {
     // Column already exists
   }
   try {
-    db!.exec(`ALTER TABLE links ADD COLUMN allow_skip INTEGER NOT NULL DEFAULT 1`);
+    db.exec(`ALTER TABLE links ADD COLUMN allow_skip INTEGER NOT NULL DEFAULT 1`);
   } catch {
     // Column already exists
   }
@@ -123,30 +203,53 @@ function initDb() {
   const defaultBlacklist = [
     'dashboard', 'login', 'signup', 'setup', 'api', 'guest',
     'admin', 'settings', 'users', 'domains', 'links', 'blacklist',
-    'account', 'profile', 'logout', 'auth'
+    'account', 'profile', 'logout', 'auth',
+    'forgot-password', 'reset-password', 'verify-email'
   ];
 
   for (const path of defaultBlacklist) {
     try {
-      db!.prepare('INSERT INTO blacklist (path, reason) VALUES (?, ?)').run(path, 'Application route');
+      db.prepare('INSERT INTO blacklist (path, reason) VALUES (?, ?)').run(path, 'Application route');
     } catch {
       // Path already exists
     }
   }
 }
 
+// Emails are matched case-insensitively. Lowercase the stored ones, leaving any that would collide
+// with another account untouched so no account is lost.
+function migrateEmailsToLowercase() {
+  const users = getHandle()!.prepare('SELECT id, email FROM users WHERE id != 0').all() as Array<{ id: number; email: string }>;
+  const taken = new Set(users.map((user) => user.email));
+  const update = getHandle()!.prepare('UPDATE users SET email = ? WHERE id = ?');
+
+  for (const user of users) {
+    const lowered = normalizeEmail(user.email);
+    if (lowered === user.email || taken.has(lowered)) continue;
+    update.run(lowered, user.id);
+    taken.delete(user.email);
+    taken.add(lowered);
+  }
+
+  try {
+    getHandle()!.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email_nocase ON users(email COLLATE NOCASE)');
+  } catch {
+    console.warn('Duplicate emails differing only by case exist; resolve them to enforce case-insensitive uniqueness.');
+  }
+}
+
 function tableExists(tableName: string) {
-  return !!db!.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName);
+  return !!getHandle()!.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName);
 }
 
 function columnExists(tableName: string, columnName: string) {
-  const columns = db!.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
+  const columns = getHandle()!.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>;
   return columns.some((column) => column.name === columnName);
 }
 
 function migrateSetupTableToSettings() {
   if (tableExists('setup') && !tableExists('settings')) {
-    db!.exec('ALTER TABLE setup RENAME TO settings');
+    getHandle()!.exec('ALTER TABLE setup RENAME TO settings');
   }
 }
 
@@ -163,7 +266,7 @@ function migrateAddSecurityFields() {
 
   for (const field of fieldsToAdd) {
     if (!columnExists('settings', field.name)) {
-      db!.exec(`ALTER TABLE settings ADD COLUMN ${field.name} ${field.type}`);
+      getHandle()!.exec(`ALTER TABLE settings ADD COLUMN ${field.name} ${field.type}`);
     }
   }
 }
@@ -171,7 +274,7 @@ function migrateAddSecurityFields() {
 function migrateSetupRowToSettings() {
   if (!tableExists('setup') || !tableExists('settings')) return;
 
-  const setup = db!.prepare('SELECT * FROM setup WHERE id = 1').get() as {
+  const setup = getHandle()!.prepare('SELECT * FROM setup WHERE id = 1').get() as {
     is_completed?: number;
     site_title?: string | null;
     site_domain?: string | null;
@@ -179,22 +282,22 @@ function migrateSetupRowToSettings() {
 
   if (!setup) return;
 
-  const settings = db!.prepare('SELECT * FROM settings WHERE id = 1').get();
+  const settings = getHandle()!.prepare('SELECT * FROM settings WHERE id = 1').get();
   if (!settings) {
-    db!.prepare('INSERT INTO settings (id, is_completed) VALUES (1, ?)').run(setup.is_completed ?? 0);
+    getHandle()!.prepare('INSERT INTO settings (id, is_completed) VALUES (1, ?)').run(setup.is_completed ?? 0);
   } else if (setup.is_completed !== undefined) {
-    db!.prepare('UPDATE settings SET is_completed = ? WHERE id = 1').run(setup.is_completed);
+    getHandle()!.prepare('UPDATE settings SET is_completed = ? WHERE id = 1').run(setup.is_completed);
   }
 
   if (columnExists('settings', 'site_title') && columnExists('setup', 'site_title') && setup.site_title !== undefined) {
-    db!.prepare('UPDATE settings SET site_title = ? WHERE id = 1').run(setup.site_title);
+    getHandle()!.prepare('UPDATE settings SET site_title = ? WHERE id = 1').run(setup.site_title);
   }
 
   if (columnExists('settings', 'site_domain') && columnExists('setup', 'site_domain') && setup.site_domain !== undefined) {
-    db!.prepare('UPDATE settings SET site_domain = ? WHERE id = 1').run(setup.site_domain);
+    getHandle()!.prepare('UPDATE settings SET site_domain = ? WHERE id = 1').run(setup.site_domain);
   }
 
-  db!.exec('DROP TABLE setup');
+  getHandle()!.exec('DROP TABLE setup');
 }
 
 // Settings
@@ -208,7 +311,7 @@ export function completeSetup() {
 }
 
 export function getSiteSettings() {
-  return getDb().prepare('SELECT site_title, site_domain, turnstile_site_key, turnstile_secret_key, turnstile_landing_create, turnstile_login, turnstile_signup FROM settings WHERE id = 1').get() as SiteSettings | undefined;
+  return getDb().prepare('SELECT site_title, site_domain, turnstile_site_key, turnstile_secret_key, turnstile_landing_create, turnstile_login, turnstile_signup, stats_retention_days FROM settings WHERE id = 1').get() as SiteSettings | undefined;
 }
 
 export function updateSiteSettings(
@@ -218,10 +321,11 @@ export function updateSiteSettings(
   turnstileSecretKey?: string,
   turnstileLandingCreate?: boolean,
   turnstileLogin?: boolean,
-  turnstileSignup?: boolean
+  turnstileSignup?: boolean,
+  statsRetentionDays?: number
 ) {
   return getDb().prepare(
-    'UPDATE settings SET site_title = ?, site_domain = ?, turnstile_site_key = ?, turnstile_secret_key = ?, turnstile_landing_create = ?, turnstile_login = ?, turnstile_signup = ? WHERE id = 1'
+    'UPDATE settings SET site_title = ?, site_domain = ?, turnstile_site_key = ?, turnstile_secret_key = ?, turnstile_landing_create = ?, turnstile_login = ?, turnstile_signup = ?, stats_retention_days = COALESCE(?, stats_retention_days) WHERE id = 1'
   ).run(
     siteTitle,
     normalizeDomain(siteDomain),
@@ -229,17 +333,18 @@ export function updateSiteSettings(
     turnstileSecretKey || null,
     turnstileLandingCreate ? 1 : 0,
     turnstileLogin ? 1 : 0,
-    turnstileSignup ? 1 : 0
+    turnstileSignup ? 1 : 0,
+    statsRetentionDays ?? null
   );
 }
 
 // Users
-export function createUser(email: string, passwordHash: string, role: 'admin' | 'user') {
-  return getDb().prepare('INSERT INTO users (email, password_hash, role) VALUES (?, ?, ?)').run(email, passwordHash, role);
+export function createUser(email: string, passwordHash: string, role: 'admin' | 'user', emailVerified = true) {
+  return getDb().prepare('INSERT INTO users (email, password_hash, role, email_verified) VALUES (?, ?, ?, ?)').run(normalizeEmail(email), passwordHash, role, emailVerified ? 1 : 0);
 }
 
 export function getUserByEmail(email: string) {
-  return getDb().prepare('SELECT * FROM users WHERE email = ?').get(email) as User | undefined;
+  return getDb().prepare('SELECT * FROM users WHERE email = ? COLLATE NOCASE').get(email.trim()) as User | undefined;
 }
 
 export function getUserById(id: number) {
@@ -259,7 +364,7 @@ export function updateUser(id: number, data: { email?: string; role?: string }) 
   const fields = [];
   const values = [];
 
-  if (data.email !== undefined) { fields.push('email = ?'); values.push(data.email); }
+  if (data.email !== undefined) { fields.push('email = ?'); values.push(normalizeEmail(data.email)); }
   if (data.role !== undefined) { fields.push('role = ?'); values.push(data.role); }
 
   if (fields.length === 0) return;
@@ -284,6 +389,29 @@ export function invalidateUserSessions(id: number) {
 export function getUserSessionInfo(id: number) {
   return getDb().prepare('SELECT role, session_valid_after FROM users WHERE id = ?').get(id) as
     Pick<User, 'role' | 'session_valid_after'> | undefined;
+}
+
+// Email verification
+export function markEmailVerified(userId: number) {
+  return getDb().prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
+}
+
+export function createEmailVerification(userId: number, tokenHash: string, expiresAt: string) {
+  const database = getDb();
+  database.prepare("DELETE FROM email_verifications WHERE user_id = ? OR expires_at < datetime('now')").run(userId);
+  return database.prepare('INSERT INTO email_verifications (user_id, token_hash, expires_at) VALUES (?, ?, ?)').run(userId, tokenHash, expiresAt);
+}
+
+// Marks the account verified and returns true when the token was valid.
+export function consumeEmailVerification(tokenHash: string) {
+  const database = getDb();
+  return database.transaction(() => {
+    const row = database.prepare("SELECT user_id FROM email_verifications WHERE token_hash = ? AND expires_at > datetime('now')").get(tokenHash) as { user_id: number } | undefined;
+    if (!row) return false;
+    markEmailVerified(row.user_id);
+    database.prepare('DELETE FROM email_verifications WHERE user_id = ?').run(row.user_id);
+    return true;
+  })();
 }
 
 // Password resets
@@ -522,8 +650,23 @@ export function linkExists(shortCode: string, domainId: number) {
 }
 
 // Stats
+const PURGE_INTERVAL_MS = 60 * 60 * 1000;
+let lastStatsPurge = 0;
+
+// Deletes click records older than the configured retention (0 keeps everything).
+export function purgeOldStats(force = false) {
+  const now = Date.now();
+  if (!force && now - lastStatsPurge < PURGE_INTERVAL_MS) return 0;
+  lastStatsPurge = now;
+
+  const days = getSiteSettings()?.stats_retention_days ?? 0;
+  if (days <= 0) return 0;
+  return getDb().prepare("DELETE FROM stats WHERE visited_at < datetime('now', '-' || ? || ' days')").run(days).changes;
+}
+
 export function createStat(linkId: number, ipAddress: string, userAgent: string, referrer: string, country?: string) {
   const ipHash = createHash('sha256').update(ipAddress).digest('hex');
+  purgeOldStats();
   return getDb().prepare('INSERT INTO stats (link_id, ip_hash, user_agent, referrer, country) VALUES (?, ?, ?, ?, ?)').run(
     linkId, ipHash, userAgent, referrer, country || null
   );

@@ -6,6 +6,10 @@ export function isValidEmail(value: unknown): value is string {
   return typeof value === 'string' && value.length <= 254 && EMAIL_PATTERN.test(value.trim());
 }
 
+export function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
 export function isValidPassword(value: unknown): value is string {
   return typeof value === 'string' && value.length >= MIN_PASSWORD_LENGTH && value.length <= 128;
 }

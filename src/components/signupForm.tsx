@@ -30,6 +30,7 @@ export function SignupForm({
 }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [verificationSent, setVerificationSent] = useState(false)
   const [turnstileToken, setTurnstileToken] = useState("")
   const [turnstileKey, setTurnstileKey] = useState(0)
   const router = useRouter()
@@ -66,7 +67,13 @@ export function SignupForm({
     })
 
     if (res.ok) {
-      router.push("/login")
+      const data = await res.json().catch(() => ({}))
+      if (data.verificationRequired) {
+        setVerificationSent(true)
+        setLoading(false)
+      } else {
+        router.push("/login")
+      }
     } else {
       const data = await res.json()
       setError(data.error || "Signup failed")
@@ -74,6 +81,22 @@ export function SignupForm({
       setTurnstileKey((key) => key + 1)
       setLoading(false)
     }
+  }
+
+  if (verificationSent) {
+    return (
+      <Card {...props}>
+        <CardHeader>
+          <CardTitle>Check your email</CardTitle>
+          <CardDescription>
+            We sent a verification link to your email address. Open it to activate your account, then log in.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button className="w-full" onClick={() => router.push("/login")}>Go to login</Button>
+        </CardContent>
+      </Card>
+    )
   }
 
   return (

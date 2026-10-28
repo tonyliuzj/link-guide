@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { useSession } from "next-auth/react"
+import { signOut, useSession } from "next-auth/react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 
@@ -58,8 +58,9 @@ export default function Page() {
     })
 
     if (res.ok) {
-      setSuccess("Password updated successfully")
-      e.currentTarget.reset()
+      // Changing the password signs out every session, including this one.
+      setSuccess("Password updated. Signing you out...")
+      await signOut({ callbackUrl: "/login" })
     } else {
       const data = await res.json()
       setError(data.error || "Failed to update password")
