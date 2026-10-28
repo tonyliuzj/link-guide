@@ -1,10 +1,13 @@
 import NextAuth from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import { CredentialsSignin } from "next-auth"
-import { compare } from "bcryptjs"
+import { compare, hashSync } from "bcryptjs"
 import { normalizeDomain } from "@/lib/domainUtils"
 import { getRequestIp, verifyTurnstileToken } from "@/lib/turnstile"
 import { rateLimit, resetRateLimit } from "@/lib/rateLimit"
+
+// Compared against when the email is unknown, so the response time does not reveal which emails have accounts.
+const DUMMY_PASSWORD_HASH = hashSync("not-a-real-password", 10)
 
 function getProtocolForDomain(domain: string) {
   return domain.startsWith("localhost") || domain.startsWith("127.0.0.1") || domain.startsWith("[::1]")
@@ -69,6 +72,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         const user = getUserByEmail(credentials.email as string)
         if (!user) {
+          await compare(credentials.password as string, DUMMY_PASSWORD_HASH)
           return null
         }
 

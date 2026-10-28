@@ -15,6 +15,7 @@ import { signOut, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { normalizeDomain } from "@/lib/domainUtils"
 import type { SiteSettings } from "@/types/models"
+import { downloadFile } from "@/lib/utils"
 
 export default function Page() {
   const { data: session, status } = useSession()
@@ -249,7 +250,7 @@ export default function Page() {
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div>
-                      <Button type="button" variant="outline" onClick={() => { window.location.href = "/api/backup" }}>
+                      <Button type="button" variant="outline" onClick={() => downloadFile("/api/backup")}>
                         Download backup
                       </Button>
                     </div>
