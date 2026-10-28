@@ -275,13 +275,35 @@ check_required_commands() {
 # Repository functions
 # ============================================================
 
+# Fast-forward to the latest code. package-lock.json is regenerated on the server (npm rewrites it,
+# and this script may refresh it), so a local edit to it must never block an update; anything else
+# modified locally is reported instead of being overwritten.
+pull_latest_code() {
+  local dirty
+
+  if ! git diff --quiet -- package-lock.json; then
+    echo "Discarding local changes to package-lock.json (it is regenerated from package.json)."
+    git checkout -- package-lock.json
+  fi
+
+  dirty="$(git status --porcelain --untracked-files=no)"
+  if [ -n "$dirty" ]; then
+    echo "Local changes would be overwritten by the update:"
+    echo "$dirty"
+    echo "Commit, stash (git stash) or discard them in ${INSTALL_DIR}, then run the update again."
+    exit 1
+  fi
+
+  git pull --ff-only
+}
+
 ensure_repo_present() {
   validate_template_config
 
   if [ -d "$INSTALL_DIR/.git" ]; then
     step "Repository already exists. Pulling latest changes..."
     cd "$INSTALL_DIR"
-    git pull --ff-only
+    pull_latest_code
   elif [ -d "$INSTALL_DIR" ]; then
     step "Directory exists but is not a git repository. Removing and cloning fresh..."
     rm -rf "$INSTALL_DIR"
@@ -895,7 +917,7 @@ update_direct() {
   cd "$INSTALL_DIR"
 
   step "Pulling latest code..."
-  git pull --ff-only
+  pull_latest_code
 
   ensure_app_env_defaults
 
@@ -1014,7 +1036,7 @@ update_docker_mode() {
   cd "$INSTALL_DIR"
 
   step "Pulling latest code..."
-  git pull --ff-only
+  pull_latest_code
 
   ensure_app_env_defaults
 
