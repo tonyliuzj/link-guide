@@ -18,7 +18,7 @@ A modern, self-hosted URL shortener with advanced features including multiple re
 For automated installation on Linux servers:
 
 ```bash
-curl -sSL https://github.com/tonyliuzj/shrinx/releases/latest/download/link-guide.sh -o link-guide.sh && chmod +x link-guide.sh && bash link-guide.sh
+curl -sSL https://github.com/tonyliuzj/link-guide/releases/latest/download/link-guide.sh -o link-guide.sh && chmod +x link-guide.sh && bash link-guide.sh
 ```
 
 This will download and run the installer, which supports both systemd and Docker deployments.
@@ -52,7 +52,7 @@ Visit `http://localhost:3000/setup` after the container starts.
 ### Docker Compose
 
 ```bash
-git clone https://github.com/tonyliuzj/shrinx.git link-guide
+git clone https://github.com/tonyliuzj/link-guide.git
 cd link-guide
 cp example.env.local .env.local
 ```
@@ -106,7 +106,7 @@ docker compose down
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/tonyliuzj/shrinx.git link-guide
+git clone https://github.com/tonyliuzj/link-guide.git
 cd link-guide
 ```
 

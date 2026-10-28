@@ -11,7 +11,7 @@ set -euo pipefail
 
 APP_NAME="${APP_NAME:-link-guide}"
 APP_TITLE="${APP_TITLE:-link-guide}"
-GIT_REPO="${GIT_REPO:-https://github.com/tonyliuzj/shrinx.git}"
+GIT_REPO="${GIT_REPO:-https://github.com/tonyliuzj/link-guide.git}"
 
 RUN_USER="${SUDO_USER:-$USER}"
 RUN_GROUP="$(id -gn "$RUN_USER")"
