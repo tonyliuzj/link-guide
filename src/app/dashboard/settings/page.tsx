@@ -14,12 +14,13 @@ import { toast } from "sonner"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { normalizeDomain } from "@/lib/domainUtils"
+import type { SiteSettings } from "@/types/models"
 
 export default function Page() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [settings, setSettings] = useState<any>(null)
+  const [settings, setSettings] = useState<SiteSettings | null>(null)
   const [turnstileLandingCreate, setTurnstileLandingCreate] = useState(false)
   const [turnstileLogin, setTurnstileLogin] = useState(false)
   const [turnstileSignup, setTurnstileSignup] = useState(false)

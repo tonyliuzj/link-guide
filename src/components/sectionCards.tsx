@@ -10,8 +10,9 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { TrendingUpIcon } from "lucide-react"
+import type { LinkListRow } from "@/lib/db"
 
-export function SectionCards({ data = [] }: { data?: any[] }) {
+export function SectionCards({ data = [] }: { data?: LinkListRow[] }) {
   const totalLinks = data.length
   const totalClicks = data.reduce((sum, link) => sum + (link.click_count || 0), 0)
   const activeLinks = data.filter(link => !link.expires_at || new Date(link.expires_at) >= new Date()).length

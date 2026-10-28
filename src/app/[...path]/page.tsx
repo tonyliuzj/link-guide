@@ -8,6 +8,7 @@ import { CustomPage } from '@/components/customPage';
 import { getRequestHostname, getShortCodeFromPath } from '@/lib/domainUtils';
 import { normalizeRedirectUrl } from '@/lib/redirectUrl';
 import { isLinkExpired } from '@/lib/linkRules';
+import { getRequestIp } from '@/lib/turnstile';
 
 export const runtime = 'nodejs';
 
@@ -42,7 +43,7 @@ export default async function Page({ params }: { params: Promise<{ path: string[
   }
 
   if (link.stats_enabled) {
-    const ip = headersList.get('x-forwarded-for') || 'unknown';
+    const ip = getRequestIp(headersList) || 'unknown';
     const userAgent = headersList.get('user-agent') || '';
     const referrer = headersList.get('referer') || '';
     const country = headersList.get('cf-ipcountry') || headersList.get('x-vercel-ip-country') || undefined;
@@ -104,7 +105,7 @@ export default async function Page({ params }: { params: Promise<{ path: string[
         destinationUrl={link.turnstile_enabled === 1 ? undefined : destinationUrl}
         linkId={link.id}
         siteDomain={siteSettings?.site_domain || ''}
-        turnstileSiteKey={domain.turnstile_site_key}
+        turnstileSiteKey={domain.turnstile_site_key ?? undefined}
         turnstileEnabled={link.turnstile_enabled === 1}
       />
     );
@@ -115,7 +116,7 @@ export default async function Page({ params }: { params: Promise<{ path: string[
     return (
       <PasswordPage
         linkId={link.id}
-        turnstileSiteKey={domain.turnstile_site_key}
+        turnstileSiteKey={domain.turnstile_site_key ?? undefined}
         turnstileEnabled={link.turnstile_enabled === 1}
         siteDomain={siteSettings?.site_domain || ''}
       />

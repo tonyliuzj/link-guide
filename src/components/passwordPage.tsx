@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import { Footer } from "@/components/footer"
 import { getSiteApiUrl } from "@/lib/apiUrl"
 
+type TurnstileWindow = Window & { onTurnstileSuccess?: () => void }
+
 export function PasswordPage({
   linkId,
   turnstileSiteKey,
@@ -44,7 +46,7 @@ export function PasswordPage({
       const text = await res.text()
       setError(text || "Invalid password")
       setIsSubmitting(false)
-    } catch (err) {
+    } catch {
       setError("Failed to verify password")
       setIsSubmitting(false)
     }
@@ -52,7 +54,7 @@ export function PasswordPage({
 
   useEffect(() => {
     if (showTurnstile) {
-      (window as any).onTurnstileSuccess = () => {
+      (window as TurnstileWindow).onTurnstileSuccess = () => {
         setTurnstileCompleted(true)
       }
 
@@ -63,7 +65,7 @@ export function PasswordPage({
       document.body.appendChild(script)
 
       return () => {
-        delete (window as any).onTurnstileSuccess
+        delete (window as TurnstileWindow).onTurnstileSuccess
         if (document.body.contains(script)) {
           document.body.removeChild(script)
         }

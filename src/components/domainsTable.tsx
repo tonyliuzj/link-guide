@@ -6,8 +6,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import type { Domain } from "@/types/models"
 
-export function DomainsTable({ domains }: { domains: any[] }) {
+export function DomainsTable({ domains }: { domains: Domain[] }) {
   const [selected, setSelected] = useState<number[]>([])
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const router = useRouter()
@@ -72,7 +73,7 @@ export function DomainsTable({ domains }: { domains: any[] }) {
             </tr>
           </thead>
           <tbody>
-            {domains.map((domain: any) => (
+            {domains.map((domain) => (
               <tr key={domain.id} className="border-b hover:bg-muted/50">
                 <td className="p-3">
                   <input

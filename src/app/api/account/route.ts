@@ -26,6 +26,9 @@ export async function PUT(req: NextRequest) {
   // Update password if provided
   if (body.currentPassword && body.newPassword) {
     const user = getUserById(userId)
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
     const isValid = await compare(body.currentPassword, user.password_hash)
 
     if (!isValid) {

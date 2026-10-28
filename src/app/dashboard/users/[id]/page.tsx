@@ -14,11 +14,12 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import type { UserListItem } from "@/types/models"
 
 export default function Page({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const [id, setId] = useState<string>("")
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<UserListItem | null>(null)
   const [loading, setLoading] = useState(false)
   const [role, setRole] = useState<string>("user")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)

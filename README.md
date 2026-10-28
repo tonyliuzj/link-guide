@@ -18,7 +18,7 @@ A modern, self-hosted URL shortener with advanced features including multiple re
 For automated installation on Linux servers:
 
 ```bash
-curl -sSL https://github.com/tonyliuzj/link-guide/releases/latest/download/link-guide.sh -o link-guide.sh && chmod +x link-guide.sh && bash link-guide.sh
+curl -sSL https://github.com/tonyliuzj/shrinx/releases/latest/download/link-guide.sh -o link-guide.sh && chmod +x link-guide.sh && bash link-guide.sh
 ```
 
 This will download and run the installer, which supports both systemd and Docker deployments.
@@ -30,7 +30,7 @@ The Docker image is published to Docker Hub:
 
 ```text
 tonyliuzj/link-guide:latest
-tonyliuzj/link-guide:0.1.0
+tonyliuzj/link-guide:<commit-sha>
 ```
 
 ### Docker Run
@@ -52,7 +52,7 @@ Visit `http://localhost:3000/setup` after the container starts.
 ### Docker Compose
 
 ```bash
-git clone https://github.com/tonyliuzj/link-guide.git
+git clone https://github.com/tonyliuzj/shrinx.git link-guide
 cd link-guide
 cp example.env.local .env.local
 ```
@@ -106,7 +106,7 @@ docker compose down
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/tonyliuzj/link-guide.git
+git clone https://github.com/tonyliuzj/shrinx.git link-guide
 cd link-guide
 ```
 
@@ -190,7 +190,10 @@ If deploying behind nginx, add these headers to your proxy configuration:
 proxy_set_header Host $host;
 proxy_set_header X-Forwarded-Host $host;
 proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
 ```
+
+Client IPs (used for rate limiting and click stats) are read from `CF-Connecting-IP`, `X-Real-IP`, or the last `X-Forwarded-For` entry, so run the app behind a proxy that sets one of them.
 
 ### Password Reset Email
 

@@ -15,12 +15,13 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
+import type { Domain, Link as LinkModel } from "@/types/models"
 
 export default function Page({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const [id, setId] = useState<string>("")
-  const [link, setLink] = useState<any>(null)
-  const [domain, setDomain] = useState<any>(null)
+  const [link, setLink] = useState<LinkModel | null>(null)
+  const [domain, setDomain] = useState<Domain | null>(null)
   const [loading, setLoading] = useState(false)
   const [mode, setMode] = useState<string>("simple")
   const [statsEnabled, setStatsEnabled] = useState(true)
@@ -57,7 +58,7 @@ export default function Page({ params }: { params: Promise<{ id: string }> }) {
     setLoading(true)
     const formData = new FormData(e.currentTarget)
 
-    const body: any = {
+    const body: Record<string, unknown> = {
       destinationUrl: formData.get("destinationUrl"),
       mode,
       statsEnabled,

@@ -41,10 +41,11 @@ export async function POST(request: Request) {
     const passwordHash = await hash(password, 10);
     createUser(email, passwordHash, 'user');
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    if (error.message?.includes('UNIQUE constraint failed')) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    if (message.includes('UNIQUE constraint failed')) {
       return NextResponse.json({ error: 'Email already exists' }, { status: 400 });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -11,7 +11,7 @@ set -euo pipefail
 
 APP_NAME="${APP_NAME:-link-guide}"
 APP_TITLE="${APP_TITLE:-link-guide}"
-GIT_REPO="${GIT_REPO:-https://github.com/tonyliuzj/link-guide.git}"
+GIT_REPO="${GIT_REPO:-https://github.com/tonyliuzj/shrinx.git}"
 
 RUN_USER="${SUDO_USER:-$USER}"
 RUN_GROUP="$(id -gn "$RUN_USER")"
@@ -742,6 +742,16 @@ DATABASE_URL=$DIRECT_DATABASE_PATH
 
 # Server port (default: 3000)
 PORT=$HOST_PORT
+
+# Optional: SMTP settings enable "Forgot password" emails
+# SMTP_HOST=smtp.example.com
+# SMTP_PORT=587
+# SMTP_USER=
+# SMTP_PASSWORD=
+# SMTP_SECURE=false
+# SMTP_FROM="link-guide <no-reply@example.com>"
+# Public URL used in reset links (defaults to the site domain from settings)
+# APP_URL=https://example.com
 EOF
 }
 
@@ -762,6 +772,16 @@ DATABASE_URL=$DOCKER_DATABASE_PATH
 
 # Server port (default: 3000)
 PORT=$CONTAINER_PORT
+
+# Optional: SMTP settings enable "Forgot password" emails
+# SMTP_HOST=smtp.example.com
+# SMTP_PORT=587
+# SMTP_USER=
+# SMTP_PASSWORD=
+# SMTP_SECURE=false
+# SMTP_FROM="link-guide <no-reply@example.com>"
+# Public URL used in reset links (defaults to the site domain from settings)
+# APP_URL=https://example.com
 EOF
 
   cat > "${INSTALL_DIR}/${COMPOSE_ENV_FILE}" <<EOF

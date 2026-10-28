@@ -10,9 +10,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import type { Domain } from "@/types/models"
 
 export default function Page() {
-  const [domains, setDomains] = useState<any[]>([])
+  const [domains, setDomains] = useState<Domain[]>([])
   const [selectedDomainId, setSelectedDomainId] = useState("")
   const [mode, setMode] = useState("simple")
   const [loading, setLoading] = useState(false)
@@ -26,7 +27,7 @@ export default function Page() {
     })
   }, [])
 
-  const selectedDomain = domains.find((d: any) => d.id.toString() === selectedDomainId)
+  const selectedDomain = domains.find((d) => d.id.toString() === selectedDomainId)
   const hasTurnstile = !!selectedDomain?.turnstile_site_key?.trim()
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -37,7 +38,7 @@ export default function Page() {
     const formData = new FormData(e.currentTarget)
     const domainId = parseInt(formData.get("domain") as string)
     const turnstileEnabled = hasTurnstile && formData.get("turnstileEnabled") === "on"
-    const data: any = {
+    const data: Record<string, unknown> = {
       destinationUrl: formData.get("destination"),
       domainId,
       shortCode: formData.get("shortCode") || undefined,
@@ -112,7 +113,7 @@ export default function Page() {
                     onChange={(e) => setSelectedDomainId(e.target.value)}
                     required
                   >
-                    {domains.map((d: any) => (
+                    {domains.map((d) => (
                       <option key={d.id} value={d.id}>{d.domain}{d.base_path}</option>
                     ))}
                   </select>

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { normalizeDomain } from "@/lib/domainUtils"
@@ -19,14 +19,7 @@ export default function Page() {
   const [isActive, setIsActive] = useState(true)
   const [allowGuestCreate, setAllowGuestCreate] = useState(false)
   const [baseResponse, setBaseResponse] = useState("default")
-  const [siteSettings, setSiteSettings] = useState<any>(null)
   const router = useRouter()
-
-  useEffect(() => {
-    fetch('/api/settings')
-      .then(res => res.json())
-      .then(data => setSiteSettings(data))
-  }, [])
 
   function handleDomainBlur(event: React.FocusEvent<HTMLInputElement>) {
     event.currentTarget.value = normalizeDomain(event.currentTarget.value)

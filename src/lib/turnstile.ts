@@ -28,8 +28,12 @@ export async function verifyTurnstileToken(
   }
 }
 
+// Client-supplied X-Forwarded-For entries come first and can be forged; the proxy in front of the app
+// appends the address it actually saw, so the last entry is the one to trust.
 export function getRequestIp(headersList: { get(name: string): string | null }) {
-  return headersList.get('x-forwarded-for')?.split(',')[0]?.trim()
+  const forwarded = headersList.get('x-forwarded-for')?.split(',').map((part) => part.trim()).filter(Boolean);
+  return headersList.get('cf-connecting-ip')
     || headersList.get('x-real-ip')
+    || forwarded?.[forwarded.length - 1]
     || null;
 }

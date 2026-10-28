@@ -15,15 +15,16 @@ import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { normalizeDomain } from "@/lib/domainUtils"
+import type { Domain, SiteSettings } from "@/types/models"
 
 export default function Page({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
   const [id, setId] = useState<string>("")
-  const [domain, setDomain] = useState<any>(null)
+  const [domain, setDomain] = useState<Domain | null>(null)
   const [loading, setLoading] = useState(false)
   const [baseResponse, setBaseResponse] = useState<string>("default")
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [siteSettings, setSiteSettings] = useState<any>(null)
+  const [siteSettings, setSiteSettings] = useState<SiteSettings | null>(null)
 
   function handleDomainBlur(event: React.FocusEvent<HTMLInputElement>) {
     event.currentTarget.value = normalizeDomain(event.currentTarget.value)

@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
+import type { LinkListRow } from "@/lib/db"
 
 const MODE_LABELS: Record<string, string> = {
   simple: "Simple Redirect",
@@ -8,7 +9,7 @@ const MODE_LABELS: Record<string, string> = {
   turnstile: "Turnstile Protected",
 }
 
-export function TopLinksTable({ links, limit = 10 }: { links: any[]; limit?: number }) {
+export function TopLinksTable({ links, limit = 10 }: { links: LinkListRow[]; limit?: number }) {
   const top = [...links]
     .sort((a, b) => (b.click_count || 0) - (a.click_count || 0))
     .slice(0, limit)

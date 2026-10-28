@@ -6,8 +6,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import type { LinkListRow } from "@/lib/db"
 
-export function LinksTable({ links }: { links: any[] }) {
+export function LinksTable({ links }: { links: LinkListRow[] }) {
   const [selected, setSelected] = useState<number[]>([])
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const router = useRouter()
@@ -73,7 +74,7 @@ export function LinksTable({ links }: { links: any[] }) {
             </tr>
           </thead>
           <tbody>
-            {links.map((link: any) => (
+            {links.map((link) => (
               <tr key={link.id} className="border-b hover:bg-muted/50">
                 <td className="p-3">
                   <input

@@ -92,7 +92,7 @@ export async function POST(req: NextRequest) {
     shortCode = generateShortCode()
   }
 
-  const linkData: any = {
+  const linkData: Parameters<typeof createLink>[0] = {
     shortCode,
     destinationUrl,
     domainId: domain.id,

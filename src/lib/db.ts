@@ -3,6 +3,7 @@ import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { createHash } from 'crypto';
 import { getHostnameCandidates, normalizeBasePath, normalizeDomain } from './domainUtils';
+import type { BlacklistItem, Domain, Link, SiteSettings, User, UserListItem } from '@/types/models';
 
 const DB_PATH = process.env.DATABASE_URL || './data/linkguide.db';
 let db: Database.Database | null = null;
@@ -49,65 +50,72 @@ function initDb() {
   // Create guest user (id=0) for guest-created links
   try {
     db!.exec(`INSERT INTO users (id, email, password_hash, role) VALUES (0, 'guest@system', '', 'user')`);
-  } catch (e) {
+  } catch {
     // Guest user already exists
   }
 
   // Add site settings columns to settings table
   try {
     db!.exec(`ALTER TABLE settings ADD COLUMN site_title TEXT DEFAULT 'LinkGuide'`);
-  } catch (e) {
+  } catch {
     // Column already exists
   }
   try {
     db!.exec(`ALTER TABLE settings ADD COLUMN site_domain TEXT`);
-  } catch (e) {
+  } catch {
     // Column already exists
   }
 
   migrateSetupRowToSettings();
 
+  // Add session invalidation column to users table
+  try {
+    db!.exec(`ALTER TABLE users ADD COLUMN session_valid_after INTEGER NOT NULL DEFAULT 0`);
+  } catch {
+    // Column already exists
+  }
+
   // Add missing columns to domains table
   try {
     db!.exec(`ALTER TABLE domains ADD COLUMN allow_guest_create INTEGER NOT NULL DEFAULT 0`);
-  } catch (e) {
+  } catch {
     // Column already exists
   }
   try {
     db!.exec(`ALTER TABLE domains ADD COLUMN turnstile_site_key TEXT`);
-  } catch (e) {
+  } catch {
     // Column already exists
   }
   try {
     db!.exec(`ALTER TABLE domains ADD COLUMN turnstile_secret_key TEXT`);
-  } catch (e) {
+  } catch {
     // Column already exists
   }
   try {
     db!.exec(`ALTER TABLE domains ADD COLUMN base_response TEXT NOT NULL DEFAULT '404'`);
-  } catch (e) {
+  } catch {
     // Column already exists
   }
   try {
     db!.exec(`ALTER TABLE domains ADD COLUMN base_redirect_url TEXT`);
-  } catch (e) {
+  } catch {
     // Column already exists
   }
 
   // Add missing columns to links table
   try {
     db!.exec(`ALTER TABLE links ADD COLUMN turnstile_enabled INTEGER NOT NULL DEFAULT 0`);
-  } catch (e) {
+  } catch {
     // Column already exists
   }
   try {
     db!.exec(`ALTER TABLE links ADD COLUMN redirect_delay INTEGER NOT NULL DEFAULT 0`);
-  } catch (e) {
+  } catch {
     // Column already exists
   }
   try {
     db!.exec(`ALTER TABLE links ADD COLUMN allow_skip INTEGER NOT NULL DEFAULT 1`);
-  } catch (e) {
+  } catch {
     // Column already exists
   }
 
@@ -121,7 +129,7 @@ function initDb() {
   for (const path of defaultBlacklist) {
     try {
       db!.prepare('INSERT INTO blacklist (path, reason) VALUES (?, ?)').run(path, 'Application route');
-    } catch (e) {
+    } catch {
       // Path already exists
     }
   }
@@ -200,15 +208,7 @@ export function completeSetup() {
 }
 
 export function getSiteSettings() {
-  return getDb().prepare('SELECT site_title, site_domain, turnstile_site_key, turnstile_secret_key, turnstile_landing_create, turnstile_login, turnstile_signup FROM settings WHERE id = 1').get() as {
-    site_title: string;
-    site_domain: string;
-    turnstile_site_key?: string;
-    turnstile_secret_key?: string;
-    turnstile_landing_create: number;
-    turnstile_login: number;
-    turnstile_signup: number;
-  } | undefined;
+  return getDb().prepare('SELECT site_title, site_domain, turnstile_site_key, turnstile_secret_key, turnstile_landing_create, turnstile_login, turnstile_signup FROM settings WHERE id = 1').get() as SiteSettings | undefined;
 }
 
 export function updateSiteSettings(
@@ -239,15 +239,15 @@ export function createUser(email: string, passwordHash: string, role: 'admin' | 
 }
 
 export function getUserByEmail(email: string) {
-  return getDb().prepare('SELECT * FROM users WHERE email = ?').get(email) as any;
+  return getDb().prepare('SELECT * FROM users WHERE email = ?').get(email) as User | undefined;
 }
 
 export function getUserById(id: number) {
-  return getDb().prepare('SELECT * FROM users WHERE id = ?').get(id) as any;
+  return getDb().prepare('SELECT * FROM users WHERE id = ?').get(id) as User | undefined;
 }
 
 export function getAllUsers() {
-  return getDb().prepare('SELECT id, email, role, created_at FROM users').all() as any[];
+  return getDb().prepare('SELECT id, email, role, created_at FROM users').all() as UserListItem[];
 }
 
 export function countAdminUsers() {
@@ -274,6 +274,16 @@ export function deleteUser(id: number) {
 
 export function updatePassword(id: number, passwordHash: string) {
   return getDb().prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, id);
+}
+
+// Sessions issued before this unix time (seconds) are no longer valid
+export function invalidateUserSessions(id: number) {
+  return getDb().prepare("UPDATE users SET session_valid_after = CAST(strftime('%s', 'now') AS INTEGER) WHERE id = ?").run(id);
+}
+
+export function getSessionValidAfter(id: number) {
+  const row = getDb().prepare('SELECT session_valid_after FROM users WHERE id = ?').get(id) as { session_valid_after: number } | undefined;
+  return row?.session_valid_after ?? 0;
 }
 
 // Password resets
@@ -326,7 +336,7 @@ export function getDomainByHostname(hostname: string) {
   const candidates = getHostnameCandidates(hostname);
   if (candidates.length === 0) return null;
 
-  const domains = getDb().prepare('SELECT * FROM domains WHERE is_active = 1').all() as any[];
+  const domains = getDb().prepare('SELECT * FROM domains WHERE is_active = 1').all() as Domain[];
   for (const candidate of candidates) {
     const domain = domains.find((item) => normalizeDomain(item.domain) === candidate);
     if (domain) return domain;
@@ -336,11 +346,11 @@ export function getDomainByHostname(hostname: string) {
 }
 
 export function getAllDomains() {
-  return getDb().prepare('SELECT * FROM domains ORDER BY created_at DESC').all();
+  return getDb().prepare('SELECT * FROM domains ORDER BY created_at DESC').all() as Domain[];
 }
 
 export function getDomainById(id: number) {
-  return getDb().prepare('SELECT * FROM domains WHERE id = ?').get(id) as any;
+  return getDb().prepare('SELECT * FROM domains WHERE id = ?').get(id) as Domain | undefined;
 }
 
 export function domainExists(domain: string, excludeId?: number) {
@@ -431,11 +441,11 @@ export function createLink(data: {
 }
 
 export function getLinkByShortCode(shortCode: string, domainId: number) {
-  return getDb().prepare('SELECT * FROM links WHERE short_code = ? AND domain_id = ?').get(shortCode, domainId) as any;
+  return getDb().prepare('SELECT * FROM links WHERE short_code = ? AND domain_id = ?').get(shortCode, domainId) as Link | undefined;
 }
 
 export function getLinkById(id: number) {
-  return getDb().prepare('SELECT * FROM links WHERE id = ?').get(id) as any;
+  return getDb().prepare('SELECT * FROM links WHERE id = ?').get(id) as Link | undefined;
 }
 
 export function getLinksByUserId(userId: number) {
@@ -475,7 +485,7 @@ export function updateLink(id: number, data: Partial<{
   expiresAt: string | null;
 }>) {
   const fields: string[] = [];
-  const values: any[] = [];
+  const values: Array<string | number | null> = [];
 
   if (data.destinationUrl !== undefined) { fields.push('destination_url = ?'); values.push(data.destinationUrl); }
   if (data.mode !== undefined) { fields.push('mode = ?'); values.push(data.mode); }
@@ -613,7 +623,7 @@ export function getStatsBreakdown(userId?: number, days: number = 90): StatsBrea
 
 // Blacklist
 export function getAllBlacklist() {
-  return getDb().prepare('SELECT * FROM blacklist ORDER BY created_at DESC').all();
+  return getDb().prepare('SELECT * FROM blacklist ORDER BY created_at DESC').all() as BlacklistItem[];
 }
 
 export function createBlacklist(path: string, reason?: string) {

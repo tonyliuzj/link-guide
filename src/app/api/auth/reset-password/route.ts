@@ -3,7 +3,7 @@ import { createHash } from 'crypto';
 import { hash } from 'bcryptjs';
 import { rateLimit } from '@/lib/rateLimit';
 import { getRequestIp } from '@/lib/turnstile';
-import { deletePasswordResetsForUser, getValidPasswordReset, updatePassword } from '@/lib/db';
+import { deletePasswordResetsForUser, getValidPasswordReset, invalidateUserSessions, updatePassword } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
@@ -33,5 +33,6 @@ export async function POST(request: Request) {
 
   updatePassword(reset.user_id, await hash(password, 10));
   deletePasswordResetsForUser(reset.user_id);
+  invalidateUserSessions(reset.user_id);
   return NextResponse.json({ success: true });
 }

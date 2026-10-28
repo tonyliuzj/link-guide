@@ -5,8 +5,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { toast } from "sonner"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import type { BlacklistItem } from "@/types/models"
 
-export function BlacklistTable({ initialData }: { initialData: any[] }) {
+export function BlacklistTable({ initialData }: { initialData: BlacklistItem[] }) {
   const router = useRouter()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteId, setDeleteId] = useState<number | null>(null)
@@ -83,7 +84,7 @@ export function BlacklistTable({ initialData }: { initialData: any[] }) {
             </tr>
           </thead>
           <tbody>
-            {initialData.map((item: any) => (
+            {initialData.map((item) => (
               <tr key={item.id} className="border-b hover:bg-muted/50">
                 <td className="p-3">
                   <input

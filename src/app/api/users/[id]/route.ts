@@ -20,7 +20,8 @@ export async function GET(
     return NextResponse.json({ error: "User not found" }, { status: 404 })
   }
 
-  return NextResponse.json(user)
+  const { id: userId, email, role, created_at } = user
+  return NextResponse.json({ id: userId, email, role, created_at })
 }
 
 export async function PUT(

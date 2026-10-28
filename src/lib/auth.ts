@@ -105,6 +105,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.role = user.role
+        return token
+      }
+
+      // A password reset invalidates every session issued before it.
+      if (token.sub && typeof token.iat === "number") {
+        const { getSessionValidAfter } = await import("@/lib/db")
+        if (getSessionValidAfter(Number(token.sub)) > token.iat) {
+          return null
+        }
       }
       return token
     },

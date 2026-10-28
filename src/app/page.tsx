@@ -54,8 +54,11 @@ export default async function Home() {
   }
 
   const session = await auth();
-  const allDomains = getAllDomains() as any[];
-  const guestDomains = allDomains.filter((d: any) => d.allow_guest_create === 1);
+  const allDomains = getAllDomains();
+  // Only expose public fields: these props are serialized to the browser, and domain rows hold Turnstile secret keys.
+  const guestDomains = allDomains
+    .filter((d) => d.allow_guest_create === 1)
+    .map(({ id, domain, base_path }) => ({ id, domain, base_path }));
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">

@@ -4,7 +4,7 @@ import { createBlacklist, getAllBlacklist, isBlacklisted } from "@/lib/db"
 
 export const runtime = 'nodejs';
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   const session = await auth()
   if (!session?.user?.id || session.user.role !== 'admin') {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

@@ -6,8 +6,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
+import type { UserListItem } from "@/types/models"
 
-export function UsersTable({ users, currentUserId }: { users: any[], currentUserId: number }) {
+export function UsersTable({ users, currentUserId }: { users: UserListItem[], currentUserId: number }) {
   const [selected, setSelected] = useState<number[]>([])
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const router = useRouter()
@@ -73,7 +74,7 @@ export function UsersTable({ users, currentUserId }: { users: any[], currentUser
             </tr>
           </thead>
           <tbody>
-            {users.map((user: any) => {
+            {users.map((user) => {
               const isGuest = user.email === 'guest@system'
               const isCurrentUser = user.id === currentUserId
               const isProtected = isGuest || isCurrentUser

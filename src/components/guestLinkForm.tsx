@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Copy, Check } from "lucide-react"
 import { getSiteApiUrl } from "@/lib/apiUrl"
+import type { Domain } from "@/types/models"
 
 export function GuestLinkForm({
   domains,
@@ -16,7 +17,7 @@ export function GuestLinkForm({
   turnstileRequired = false,
   siteDomain
 }: {
-  domains: any[]
+  domains: Array<Pick<Domain, "id" | "domain" | "base_path">>
   turnstileSiteKey?: string
   turnstileRequired?: boolean
   siteDomain: string
@@ -97,7 +98,7 @@ export function GuestLinkForm({
       }
 
       setCreatedLink(data.shortUrl)
-    } catch (error) {
+    } catch {
       toast.error("Failed to create link")
       resetTurnstile()
     } finally {
@@ -156,7 +157,7 @@ export function GuestLinkForm({
           className="w-full px-3 py-2 border rounded-md"
           required
         >
-          {domains.map((domain: any) => (
+          {domains.map((domain) => (
             <option key={domain.id} value={domain.id}>
               {domain.domain}{domain.base_path !== '/' ? domain.base_path : ''}
             </option>
