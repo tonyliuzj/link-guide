@@ -2,8 +2,17 @@ import { NextResponse } from 'next/server';
 import { hash } from 'bcryptjs';
 import { createUser, getSiteSettings } from '@/lib/db';
 import { getRequestIp, verifyTurnstileToken } from '@/lib/turnstile';
+import { rateLimit } from '@/lib/rateLimit';
 
 export async function POST(request: Request) {
+  const limit = rateLimit(`signup:ip:${getRequestIp(request.headers) || 'unknown'}`, 10, 60 * 60 * 1000);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: 'Too many sign-up attempts. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } }
+    );
+  }
+
   const body = await request.json();
   const { email, password, turnstileToken } = body;
 

@@ -3,6 +3,7 @@ import Credentials from "next-auth/providers/credentials"
 import { compare } from "bcryptjs"
 import { normalizeDomain } from "@/lib/domainUtils"
 import { getRequestIp, verifyTurnstileToken } from "@/lib/turnstile"
+import { rateLimit, resetRateLimit } from "@/lib/rateLimit"
 
 function getProtocolForDomain(domain: string) {
   return domain.startsWith("localhost") || domain.startsWith("127.0.0.1") || domain.startsWith("[::1]")
@@ -38,6 +39,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return null
         }
 
+        const ipKey = `login:ip:${getRequestIp(request.headers) || "unknown"}`
+        const emailKey = `login:email:${(credentials.email as string).toLowerCase()}`
+        const loginWindowMs = 15 * 60 * 1000
+        if (!rateLimit(ipKey, 30, loginWindowMs).ok || !rateLimit(emailKey, 10, loginWindowMs).ok) {
+          return null
+        }
+
         const { getSiteSettings, getUserByEmail } = await import('@/lib/db')
         const siteSettings = getSiteSettings()
 
@@ -62,6 +70,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!isValid) {
           return null
         }
+
+        resetRateLimit(emailKey)
 
         return {
           id: user.id.toString(),

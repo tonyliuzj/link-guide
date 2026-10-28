@@ -1,11 +1,21 @@
 import { NextResponse } from 'next/server';
 import { createHash } from 'crypto';
 import { hash } from 'bcryptjs';
+import { rateLimit } from '@/lib/rateLimit';
+import { getRequestIp } from '@/lib/turnstile';
 import { deletePasswordResetsForUser, getValidPasswordReset, updatePassword } from '@/lib/db';
 
 export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
+  const limit = rateLimit(`reset:ip:${getRequestIp(request.headers) || 'unknown'}`, 10, 15 * 60 * 1000);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: 'Too many attempts. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': String(limit.retryAfter) } }
+    );
+  }
+
   const body = await request.json().catch(() => ({}));
   const { token, password } = body;
 

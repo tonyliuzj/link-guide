@@ -5,6 +5,7 @@ import { publicApiJson, publicApiOptions, publicApiText } from "@/lib/publicApi"
 import { normalizeRedirectUrl } from "@/lib/redirectUrl"
 import { isLinkExpired } from "@/lib/linkRules"
 import { getRequestIp, verifyTurnstileToken } from "@/lib/turnstile"
+import { rateLimit, resetRateLimit } from "@/lib/rateLimit"
 
 export const runtime = 'nodejs';
 
@@ -18,6 +19,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   if (!link || link.mode !== "password" || !link.password_hash || isLinkExpired(link.expires_at)) {
     return publicApiJson({ error: "Link not found" }, { status: 404 })
+  }
+
+  const limitKey = `verify-password:${link.id}:${getRequestIp(req.headers) || "unknown"}`
+  const limit = rateLimit(limitKey, 10, 15 * 60 * 1000)
+  if (!limit.ok) {
+    return publicApiText("Too many attempts. Please try again later.", {
+      status: 429,
+      headers: { "Retry-After": String(limit.retryAfter) },
+    })
   }
 
   const formData = await req.formData()
@@ -40,6 +50,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const isValid = await compare(password, link.password_hash)
 
   if (isValid) {
+    resetRateLimit(limitKey)
     const redirectUrl = normalizeRedirectUrl(link.destination_url)
     if (!redirectUrl) {
       return publicApiText("Invalid redirect URL", { status: 400 })
