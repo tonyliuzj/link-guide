@@ -10,7 +10,15 @@ export async function GET() {
   }
 
   const domains = getAllDomains();
-  return NextResponse.json(domains);
+  if (session.user.role === 'admin') {
+    return NextResponse.json(domains);
+  }
+
+  // Regular users only need what the link form shows; secret keys stay server-side.
+  return NextResponse.json(domains.map(({ turnstile_secret_key, ...publicDomain }) => {
+    void turnstile_secret_key;
+    return publicDomain;
+  }));
 }
 
 export async function POST(request: Request) {

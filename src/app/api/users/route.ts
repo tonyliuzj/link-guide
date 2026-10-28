@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { createUser, getUserByEmail } from "@/lib/db"
 import { hash } from "bcryptjs"
+import { isValidEmail, isValidPassword, isValidRole } from "@/lib/validation"
 
 export const runtime = 'nodejs';
 
@@ -16,6 +17,15 @@ export async function POST(req: NextRequest) {
 
   if (!email || !password || !role) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+  }
+  if (!isValidEmail(email)) {
+    return NextResponse.json({ error: "Enter a valid email address" }, { status: 400 })
+  }
+  if (!isValidPassword(password)) {
+    return NextResponse.json({ error: "Password must be 8 to 128 characters" }, { status: 400 })
+  }
+  if (!isValidRole(role)) {
+    return NextResponse.json({ error: "Role must be admin or user" }, { status: 400 })
   }
 
   // Check if email already exists

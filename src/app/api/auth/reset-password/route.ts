@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createHash } from 'crypto';
 import { hash } from 'bcryptjs';
 import { rateLimit } from '@/lib/rateLimit';
+import { isValidPassword } from '@/lib/validation';
 import { getRequestIp } from '@/lib/turnstile';
 import { deletePasswordResetsForUser, getValidPasswordReset, invalidateUserSessions, updatePassword } from '@/lib/db';
 
@@ -22,8 +23,8 @@ export async function POST(request: Request) {
   if (typeof token !== 'string' || typeof password !== 'string') {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
   }
-  if (password.length < 8) {
-    return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
+  if (!isValidPassword(password)) {
+    return NextResponse.json({ error: 'Password must be 8 to 128 characters' }, { status: 400 });
   }
 
   const reset = getValidPasswordReset(createHash('sha256').update(token).digest('hex'));

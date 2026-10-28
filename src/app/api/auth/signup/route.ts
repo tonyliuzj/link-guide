@@ -3,6 +3,7 @@ import { hash } from 'bcryptjs';
 import { createUser, getSiteSettings } from '@/lib/db';
 import { getRequestIp, verifyTurnstileToken } from '@/lib/turnstile';
 import { rateLimit } from '@/lib/rateLimit';
+import { isValidEmail, isValidPassword } from '@/lib/validation';
 
 export async function POST(request: Request) {
   const limit = rateLimit(`signup:ip:${getRequestIp(request.headers) || 'unknown'}`, 10, 60 * 60 * 1000);
@@ -33,8 +34,11 @@ export async function POST(request: Request) {
     }
   }
 
-  if (password.length < 8) {
-    return NextResponse.json({ error: 'Password must be at least 8 characters' }, { status: 400 });
+  if (!isValidEmail(email)) {
+    return NextResponse.json({ error: 'Enter a valid email address' }, { status: 400 });
+  }
+  if (!isValidPassword(password)) {
+    return NextResponse.json({ error: 'Password must be 8 to 128 characters' }, { status: 400 });
   }
 
   try {

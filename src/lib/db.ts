@@ -281,9 +281,9 @@ export function invalidateUserSessions(id: number) {
   return getDb().prepare("UPDATE users SET session_valid_after = CAST(strftime('%s', 'now') AS INTEGER) WHERE id = ?").run(id);
 }
 
-export function getSessionValidAfter(id: number) {
-  const row = getDb().prepare('SELECT session_valid_after FROM users WHERE id = ?').get(id) as { session_valid_after: number } | undefined;
-  return row?.session_valid_after ?? 0;
+export function getUserSessionInfo(id: number) {
+  return getDb().prepare('SELECT role, session_valid_after FROM users WHERE id = ?').get(id) as
+    Pick<User, 'role' | 'session_valid_after'> | undefined;
 }
 
 // Password resets

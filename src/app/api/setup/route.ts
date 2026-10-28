@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { hash } from 'bcryptjs';
+import { isValidEmail, isValidPassword } from '@/lib/validation';
 import { createUser, createDomain, completeSetup, isSetupCompleted, getSiteSettings, updateSiteSettings } from '@/lib/db';
 
 export async function POST(request: Request) {
@@ -12,6 +13,12 @@ export async function POST(request: Request) {
 
   if (!email || !password || !domain) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  }
+  if (!isValidEmail(email)) {
+    return NextResponse.json({ error: 'Enter a valid email address' }, { status: 400 });
+  }
+  if (!isValidPassword(password)) {
+    return NextResponse.json({ error: 'Password must be 8 to 128 characters' }, { status: 400 });
   }
 
   try {

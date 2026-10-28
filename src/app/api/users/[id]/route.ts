@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
+import { isValidEmail, isValidRole } from "@/lib/validation"
 import { getUserById, updateUser, deleteUser, getUserByEmail, deleteLinksByUserId, countAdminUsers } from "@/lib/db"
 
 export const runtime = 'nodejs';
@@ -35,6 +36,13 @@ export async function PUT(
 
   const { id } = await params
   const body = await req.json()
+
+  if (body.email !== undefined && !isValidEmail(body.email)) {
+    return NextResponse.json({ error: "Enter a valid email address" }, { status: 400 })
+  }
+  if (body.role !== undefined && !isValidRole(body.role)) {
+    return NextResponse.json({ error: "Role must be admin or user" }, { status: 400 })
+  }
 
   // Check if email already exists for another user
   if (body.email) {

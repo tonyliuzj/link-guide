@@ -6,6 +6,8 @@ import { publicApiJson, publicApiOptions } from "@/lib/publicApi"
 import { normalizeRedirectUrl } from "@/lib/redirectUrl"
 import { normalizeLinkMode, normalizeRedirectDelay, normalizeShortCode } from "@/lib/linkRules"
 import { getRequestIp, verifyTurnstileToken } from "@/lib/turnstile"
+import { rateLimit } from "@/lib/rateLimit"
+import { publicApiText } from "@/lib/publicApi"
 
 export const runtime = 'nodejs';
 
@@ -18,6 +20,14 @@ export async function OPTIONS() {
 }
 
 export async function POST(req: NextRequest) {
+  const limit = rateLimit(`guest-create:${getRequestIp(req.headers) || "unknown"}`, 20, 60 * 60 * 1000)
+  if (!limit.ok) {
+    return publicApiText("Too many links created. Please try again later.", {
+      status: 429,
+      headers: { "Retry-After": String(limit.retryAfter) },
+    })
+  }
+
   const formData = await req.formData()
   const domainId = parseInt(formData.get("domain")?.toString() || "0")
   const domain = getDomainById(domainId)

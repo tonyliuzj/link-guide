@@ -108,13 +108,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         return token
       }
 
-      // A password reset invalidates every session issued before it.
-      if (token.sub && typeof token.iat === "number") {
-        const { getSessionValidAfter } = await import("@/lib/db")
-        if (getSessionValidAfter(Number(token.sub)) > token.iat) {
-          return null
-        }
+      // Re-check the user on every request: deleted users and sessions issued before a password reset
+      // are dropped, and role changes (e.g. an admin demoted to user) take effect immediately.
+      if (!token.sub) return null
+      const { getUserSessionInfo } = await import("@/lib/db")
+      const info = getUserSessionInfo(Number(token.sub))
+      if (!info) return null
+      if (typeof token.iat === "number" && info.session_valid_after > token.iat) {
+        return null
       }
+      token.role = info.role
       return token
     },
     async session({ session, token }) {
