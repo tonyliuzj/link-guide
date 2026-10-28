@@ -33,7 +33,7 @@ export function VerifyEmail({ token }: { token: string }) {
       <CardHeader>
         <CardTitle>Verify your email</CardTitle>
         <CardDescription>
-          {state === "done" ? "Your email is verified. You can now log in." : "Confirm your email address to activate your account."}
+          {state === "done" ? "Your email is verified. You can now log in." : "Confirm your email address to continue."}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { readFileSync, existsSync, mkdirSync, copyFileSync, rmSync } from 'fs';
+import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { createHash } from 'crypto';
 import { normalizeEmail } from './validation';
@@ -7,8 +7,8 @@ import { getHostnameCandidates, normalizeBasePath, normalizeDomain } from './dom
 import type { BlacklistItem, Domain, Link, SiteSettings, User, UserListItem } from '@/types/models';
 
 const DB_PATH = process.env.DATABASE_URL || './data/linkguide.db';
-// Next.js can load this module once per route bundle, so the connection lives on globalThis:
-// every bundle then sees the same handle, including after a restore swaps the database file.
+// Next.js can load this module once per route bundle, so the connection lives on globalThis and
+// every bundle shares a single handle.
 const globalState = globalThis as typeof globalThis & { __linkGuideDb?: Database.Database | null };
 function getHandle() {
   return globalState.__linkGuideDb ?? null;
@@ -76,28 +76,46 @@ export function validateBackupFile(filePath: string) {
   }
 }
 
-// Replaces the live database with a validated backup. The previous database is kept next to it as
-// `<name>.pre-restore`. The new file is opened (and migrated) on the next request.
-export function restoreDatabase(uploadedPath: string) {
-  const database = getDb();
-  database.pragma('wal_checkpoint(TRUNCATE)');
-  database.close();
-  setHandle(null);
+const RESTORE_TABLES = ['settings', 'users', 'domains', 'links', 'stats', 'blacklist'];
 
-  const previousPath = `${DB_PATH}.pre-restore`;
+// Replaces the data in the live database with a validated backup. The rows are copied inside one
+// transaction instead of swapping the file, so other processes using the same database stay valid.
+// The previous contents are first saved next to the database as `<name>.pre-restore`. Everyone is
+// signed out afterwards, and pending emailed tokens are dropped.
+export async function restoreDatabase(uploadedPath: string) {
+  const database = getDb();
+  await database.backup(`${DB_PATH}.pre-restore`);
+
+  database.prepare('ATTACH DATABASE ? AS restore').run(uploadedPath);
+  database.pragma('foreign_keys = OFF');
   try {
-    copyFileSync(DB_PATH, previousPath);
-    rmSync(`${DB_PATH}-wal`, { force: true });
-    rmSync(`${DB_PATH}-shm`, { force: true });
-    copyFileSync(uploadedPath, DB_PATH);
-    getDb();
-  } catch (error) {
-    // Put the previous database back so a failed restore never leaves the app without data.
-    getHandle()?.close();
-    setHandle(null);
-    if (existsSync(previousPath)) copyFileSync(previousPath, DB_PATH);
-    throw error;
+    database.transaction(() => {
+      for (const table of RESTORE_TABLES) {
+        const liveColumns = (database.prepare(`PRAGMA main.table_info(${table})`).all() as Array<{ name: string }>).map((column) => column.name);
+        const backupColumns = new Set((database.prepare(`PRAGMA restore.table_info(${table})`).all() as Array<{ name: string }>).map((column) => column.name));
+        // Older backups may lack newer columns; those take their defaults.
+        const shared = liveColumns.filter((column) => backupColumns.has(column)).map((column) => `"${column}"`).join(', ');
+
+        database.exec(`DELETE FROM main.${table}`);
+        database.exec(`INSERT INTO main.${table} (${shared}) SELECT ${shared} FROM restore.${table}`);
+      }
+
+      database.exec('DELETE FROM main.password_resets');
+      database.exec('DELETE FROM main.email_verifications');
+      database.exec("INSERT OR IGNORE INTO main.users (id, email, password_hash, role) VALUES (0, 'guest@system', '', 'user')");
+      database.exec('INSERT OR IGNORE INTO main.settings (id, is_completed) VALUES (1, 0)');
+      database.exec("UPDATE main.users SET session_valid_after = CAST(strftime('%s', 'now') AS INTEGER)");
+
+      if ((database.pragma('foreign_key_check') as unknown[]).length > 0) {
+        throw new Error('The backup contains rows that reference missing data');
+      }
+    })();
+  } finally {
+    database.pragma('foreign_keys = ON');
+    database.exec('DETACH DATABASE restore');
   }
+
+  migrateEmailsToLowercase();
 }
 
 function initDb(db: Database.Database) {
@@ -147,6 +165,12 @@ function initDb(db: Database.Database) {
   }
 
   migrateEmailsToLowercase();
+
+  try {
+    db.exec(`ALTER TABLE email_verifications ADD COLUMN new_email TEXT`);
+  } catch {
+    // Column already exists
+  }
 
   // Existing accounts predate email verification, so they default to verified
   try {
@@ -387,8 +411,8 @@ export function invalidateUserSessions(id: number) {
 }
 
 export function getUserSessionInfo(id: number) {
-  return getDb().prepare('SELECT role, session_valid_after FROM users WHERE id = ?').get(id) as
-    Pick<User, 'role' | 'session_valid_after'> | undefined;
+  return getDb().prepare('SELECT email, role, session_valid_after FROM users WHERE id = ?').get(id) as
+    Pick<User, 'email' | 'role' | 'session_valid_after'> | undefined;
 }
 
 // Email verification
@@ -396,21 +420,35 @@ export function markEmailVerified(userId: number) {
   return getDb().prepare('UPDATE users SET email_verified = 1 WHERE id = ?').run(userId);
 }
 
-export function createEmailVerification(userId: number, tokenHash: string, expiresAt: string) {
+// A token without newEmail verifies the account's current address (signup). A token with newEmail
+// confirms a change of address: the account only switches to it once the link is used.
+export function createEmailVerification(userId: number, tokenHash: string, expiresAt: string, newEmail?: string) {
   const database = getDb();
-  database.prepare("DELETE FROM email_verifications WHERE user_id = ? OR expires_at < datetime('now')").run(userId);
-  return database.prepare('INSERT INTO email_verifications (user_id, token_hash, expires_at) VALUES (?, ?, ?)').run(userId, tokenHash, expiresAt);
+  const kind = newEmail ? 'new_email IS NOT NULL' : 'new_email IS NULL';
+  database.prepare(`DELETE FROM email_verifications WHERE (user_id = ? AND ${kind}) OR expires_at < datetime('now')`).run(userId);
+  return database.prepare('INSERT INTO email_verifications (user_id, token_hash, expires_at, new_email) VALUES (?, ?, ?, ?)')
+    .run(userId, tokenHash, expiresAt, newEmail ? normalizeEmail(newEmail) : null);
 }
 
-// Marks the account verified and returns true when the token was valid.
-export function consumeEmailVerification(tokenHash: string) {
+export type EmailVerificationResult = 'ok' | 'invalid' | 'taken';
+
+export function consumeEmailVerification(tokenHash: string): EmailVerificationResult {
   const database = getDb();
-  return database.transaction(() => {
-    const row = database.prepare("SELECT user_id FROM email_verifications WHERE token_hash = ? AND expires_at > datetime('now')").get(tokenHash) as { user_id: number } | undefined;
-    if (!row) return false;
-    markEmailVerified(row.user_id);
-    database.prepare('DELETE FROM email_verifications WHERE user_id = ?').run(row.user_id);
-    return true;
+  return database.transaction((): EmailVerificationResult => {
+    const row = database.prepare("SELECT user_id, new_email FROM email_verifications WHERE token_hash = ? AND expires_at > datetime('now')").get(tokenHash) as
+      { user_id: number; new_email: string | null } | undefined;
+    if (!row) return 'invalid';
+
+    if (row.new_email) {
+      const owner = getUserByEmail(row.new_email);
+      if (owner && owner.id !== row.user_id) return 'taken';
+      database.prepare('UPDATE users SET email = ?, email_verified = 1 WHERE id = ?').run(row.new_email, row.user_id);
+      database.prepare('DELETE FROM email_verifications WHERE token_hash = ?').run(tokenHash);
+    } else {
+      markEmailVerified(row.user_id);
+      database.prepare('DELETE FROM email_verifications WHERE user_id = ? AND new_email IS NULL').run(row.user_id);
+    }
+    return 'ok';
   })();
 }
 

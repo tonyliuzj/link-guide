@@ -73,11 +73,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: problem }, { status: 400 });
     }
 
-    restoreDatabase(upload);
+    await restoreDatabase(upload);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Database restore failed:', error);
-    return NextResponse.json({ error: 'Restore failed. The previous database was kept.' }, { status: 500 });
+    return NextResponse.json({ error: 'Restore failed. No changes were made.' }, { status: 500 });
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

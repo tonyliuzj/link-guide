@@ -32,11 +32,13 @@ CREATE TABLE IF NOT EXISTS password_resets (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Email verification tokens for self-service signups (only the SHA-256 hash is stored)
+-- Email verification tokens for signups and email changes (only the SHA-256 hash is stored).
+-- new_email is set when the token confirms a change of address instead of a signup.
 CREATE TABLE IF NOT EXISTS email_verifications (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   token_hash TEXT NOT NULL UNIQUE,
+  new_email TEXT,
   expires_at DATETIME NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );

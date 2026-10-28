@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
-import { updateUser, updatePassword, invalidateUserSessions, getUserById, getUserByEmail } from "@/lib/db"
+import { createEmailVerification, updateUser, updatePassword, invalidateUserSessions, getUserById, getUserByEmail } from "@/lib/db"
 import { hash, compare } from "bcryptjs"
 import { rateLimit } from "@/lib/rateLimit"
-import { isValidEmail, isValidPassword } from "@/lib/validation"
+import { getAppBaseUrl, isMailConfigured } from "@/lib/mail"
+import { createToken, tokenExpiry } from "@/lib/tokens"
+import { sendEmailChangeEmail } from "@/lib/verificationMail"
+import { isValidEmail, isValidPassword, normalizeEmail } from "@/lib/validation"
 
 export const runtime = 'nodejs';
 
@@ -25,7 +28,21 @@ export async function PUT(req: NextRequest) {
     if (existing && existing.id !== userId) {
       return NextResponse.json({ error: "Email already exists" }, { status: 400 })
     }
-    updateUser(userId, { email: body.email })
+
+    const current = getUserById(userId)
+    if (current && normalizeEmail(body.email) !== current.email) {
+      if (isMailConfigured()) {
+        // With email available, the new address must be confirmed before the account switches to it.
+        if (!rateLimit(`account-email:${userId}`, 5, 60 * 60 * 1000).ok) {
+          return NextResponse.json({ error: "Too many email change requests. Please try again later." }, { status: 429 })
+        }
+        const { token, tokenHash } = createToken()
+        createEmailVerification(userId, tokenHash, tokenExpiry(24 * 60 * 60 * 1000), body.email)
+        sendEmailChangeEmail(body.email.trim(), `${getAppBaseUrl(req)}/verify-email?token=${token}`)
+        return NextResponse.json({ success: true, pendingVerification: true })
+      }
+      updateUser(userId, { email: body.email })
+    }
   }
 
   // Update password if provided

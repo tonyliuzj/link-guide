@@ -32,8 +32,13 @@ export default function Page() {
     })
 
     if (res.ok) {
-      setSuccess("Email updated successfully")
-      setTimeout(() => router.refresh(), 1000)
+      const data = await res.json().catch(() => ({}))
+      if (data.pendingVerification) {
+        setSuccess("We sent a confirmation link to the new address. Your email changes once you open it.")
+      } else {
+        setSuccess("Email updated successfully")
+        setTimeout(() => router.refresh(), 1000)
+      }
     } else {
       const data = await res.json()
       setError(data.error || "Failed to update email")

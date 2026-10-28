@@ -20,7 +20,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Missing token' }, { status: 400 });
   }
 
-  if (!consumeEmailVerification(hashToken(body.token))) {
+  const result = consumeEmailVerification(hashToken(body.token));
+  if (result === 'taken') {
+    return NextResponse.json({ error: 'That email address is already used by another account' }, { status: 409 });
+  }
+  if (result === 'invalid') {
     return NextResponse.json({ error: 'This verification link is invalid or has expired' }, { status: 400 });
   }
 
