@@ -643,11 +643,30 @@ compose() {
   )
 }
 
+# A direct (systemd) deployment of this app listens on the same port, so it has to be stopped before
+# the containers can bind it. It is also disabled so it does not come back on a reboot and fight
+# Docker for the port. Both modes share the same data directory, so no data is lost.
+stop_direct_service() {
+  command_exists systemctl || return 0
+
+  if ! as_root systemctl cat "$SERVICE_NAME" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if as_root systemctl is-active --quiet "$SERVICE_NAME" || as_root systemctl is-enabled --quiet "$SERVICE_NAME"; then
+    step "Stopping the direct deployment (${SERVICE_NAME}) so Docker can use the port..."
+    as_root systemctl disable --now "$SERVICE_NAME" || true
+    sleep 2
+  fi
+}
+
 # Starts the services, retrying when the host port is still being released by the container that is
 # being replaced (Docker reports "address already in use" for a moment after a recreate).
 compose_up() {
   local attempt
   local max_attempts=4
+
+  stop_direct_service
 
   for attempt in $(seq 1 "$max_attempts"); do
     if compose up -d "$@"; then
@@ -668,15 +687,22 @@ compose_up() {
 # Tells the user what is holding the app's host port when the services still cannot start.
 report_port_owner() {
   local port
+  local listeners
+  local pid
 
   port="$(read_env_value "HOST_PORT" "${INSTALL_DIR}/${COMPOSE_ENV_FILE}")"
   port="${port:-3000}"
 
   echo "Could not start the services. If the error was 'address already in use', something else is listening on port ${port}:"
   if command -v ss >/dev/null 2>&1; then
-    as_root ss -ltnp "sport = :${port}" || true
+    listeners="$(as_root ss -ltnp "sport = :${port}" || true)"
+    echo "$listeners"
+    pid="$(echo "$listeners" | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+    if [ -n "$pid" ]; then
+      echo "Process ${pid} is holding the port. If it is a leftover copy of this app, stop it with: sudo kill ${pid}"
+    fi
   fi
-  echo "Stop that process (for example a leftover systemd service: sudo systemctl disable --now ${SERVICE_NAME}) or change HOST_PORT in ${INSTALL_DIR}/${COMPOSE_ENV_FILE}, then run the update again."
+  echo "Or change HOST_PORT in ${INSTALL_DIR}/${COMPOSE_ENV_FILE}. Then run the update again."
 }
 
 require_compose_file() {

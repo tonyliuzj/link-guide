@@ -35,7 +35,7 @@ The installer shows a menu: **Install**, **Update**, **Start**, **Stop**, **Rest
 
 Run the installer again and choose **Update**. It pulls the latest code, then:
 
-- **Docker installs** pull the newest image and restart the containers. If the host port is still being released by the old container, starting is retried automatically.
+- **Docker installs** stop a leftover direct (systemd) service if there is one, pull the newest image and restart the containers. If the host port is still being released by the old container, starting is retried automatically.
 - **Direct installs** reinstall dependencies, rebuild the app and restart the systemd service.
 
 Local edits to `package-lock.json` are discarded during an update. Any other locally modified file is stashed (not lost); restore it afterwards with `git stash pop`.
@@ -278,7 +278,7 @@ LinkGuide uses SQLite with automatic initialization and migrations. The database
 
 ## Troubleshooting
 
-- **`address already in use` when starting Docker**: the installer retries automatically. If it keeps failing, another process is using the port; the installer prints which one. Stop it or change `HOST_PORT` in `.env`.
+- **`address already in use` when starting Docker**: if the app was previously installed directly, the installer stops and disables its systemd service first (both modes use the same `data/` folder, so nothing is lost) and retries if the old container is still releasing the port. If something else is using the port, the installer prints the process and its PID. Stop it or change `HOST_PORT` in `.env`.
 - **Installer download returns an XML error**: the file is briefly missing while a release is published. Use the download command in [Quick Install](#quick-install), which retries.
 - **Emails are not arriving**: use **Settings → Email → Send test email** and read the error. Check `SMTP_SECURE` and the port.
 
