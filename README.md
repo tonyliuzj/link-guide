@@ -18,8 +18,10 @@ A modern, self-hosted URL shortener with advanced features including multiple re
 For automated installation on Linux servers:
 
 ```bash
-curl -sSL https://github.com/tonyliuzj/link-guide/releases/latest/download/link-guide.sh -o link-guide.sh && chmod +x link-guide.sh && bash link-guide.sh
+curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors https://github.com/tonyliuzj/link-guide/releases/latest/download/link-guide.sh -o link-guide.sh && chmod +x link-guide.sh && bash link-guide.sh
 ```
+
+The download is retried automatically because the file is briefly unavailable while a new version is being published.
 
 This will download and run the installer, which supports both systemd and Docker deployments.
 Choose **Docker install (Compose)** in the installer to run the published Docker image.
