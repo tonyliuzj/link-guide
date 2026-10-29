@@ -24,7 +24,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
 
-  return NextResponse.json(link)
+  // The stored link password hash never leaves the server.
+  const { password_hash, ...publicLink } = link
+  return NextResponse.json({ ...publicLink, has_password: !!password_hash })
 }
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

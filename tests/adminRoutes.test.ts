@@ -143,3 +143,18 @@ describe("GET /api/settings", () => {
     expect(body).toHaveProperty("mail_configured")
   })
 })
+
+describe("GET /api/links/[id]", () => {
+  it("never returns the stored link password hash", async () => {
+    const db = await seed()
+    db.getDb().prepare("UPDATE links SET mode = 'password', password_hash = 'bcrypt-hash-value' WHERE id = 1").run()
+    const { GET } = await import("@/app/api/links/[id]/route")
+    session = user
+
+    const res = await GET(new Request("http://app.test/x") as never, { params: Promise.resolve({ id: "1" }) })
+    const text = await res.text()
+    expect(res.status).toBe(200)
+    expect(text).not.toContain("bcrypt-hash-value")
+    expect(JSON.parse(text)).toMatchObject({ short_code: "mine", has_password: true })
+  })
+})
