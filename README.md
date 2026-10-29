@@ -205,6 +205,10 @@ When SMTP is configured, new self-service signups must also confirm their email 
 
 With SMTP configured, users who change their own email on the account page must confirm the new address first; the account keeps its old address until they click the link. Email changes made by an admin on the Users page take effect immediately.
 
+Under **Settings → Email**, admins can see whether SMTP is configured and send a test message to themselves. This is the quickest way to check the SMTP settings: the error shown on failure includes a hint when `SMTP_SECURE` looks wrong (`true` for implicit TLS, usually port 465; `false` for STARTTLS, usually port 587).
+
+When SMTP is configured, signing up with an address that already has an account gets the same response as a new signup, and the address owner receives an email instead, so the form cannot be used to find out who is registered. Without SMTP the form reports "Email already exists".
+
 ### Backup, Restore and Statistics
 
 Under **Settings → Backup & Restore**, admins can download a snapshot of the whole database and restore one from a file. A restore replaces all current data in place, signs everyone out, and saves the previous contents next to the database as `<database file>.pre-restore`. Backups from older versions restore too; columns they lack take their defaults. Backups contain password hashes and Turnstile secret keys, so store them privately.
@@ -254,6 +258,17 @@ LinkGuide uses SQLite with automatic initialization. The database and `data/` di
 - Tailwind CSS
 - Shadcn UI
 - Recharts
+
+## Development
+
+```bash
+npm run dev      # start the dev server
+npm test         # unit and route tests (vitest, uses a temporary SQLite database)
+npm run lint
+npx tsc --noEmit
+```
+
+GitHub Actions runs lint, typecheck and tests before every Docker image publish, and on pull requests.
 
 ## License
 

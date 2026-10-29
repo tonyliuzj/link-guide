@@ -10,6 +10,18 @@ export function sendEmailChangeEmail(to: string, link: string) {
   });
 }
 
+// Sent instead of an error when someone signs up with an address that already has an account, so the
+// signup form cannot be used to find out which addresses are registered.
+export function sendAccountExistsEmail(to: string, loginUrl: string, resetUrl: string) {
+  sendMail(
+    to,
+    'You already have an account',
+    `Someone (hopefully you) tried to create an account with this email address, but one already exists.\n\nLog in: ${loginUrl}\nForgot your password? ${resetUrl}\n\nIf this was not you, you can ignore this email.`
+  ).catch((error) => {
+    console.error('Failed to send account-exists email:', error);
+  });
+}
+
 // Not awaited by callers: delivery time must not reveal whether an address has an account.
 export function sendVerificationEmail(to: string, link: string) {
   sendMail(

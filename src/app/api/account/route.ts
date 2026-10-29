@@ -25,7 +25,8 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Enter a valid email address" }, { status: 400 })
     }
     const existing = getUserByEmail(body.email)
-    if (existing && existing.id !== userId) {
+    const takenByOther = !!existing && existing.id !== userId
+    if (takenByOther && !isMailConfigured()) {
       return NextResponse.json({ error: "Email already exists" }, { status: 400 })
     }
 
@@ -36,9 +37,12 @@ export async function PUT(req: NextRequest) {
         if (!rateLimit(`account-email:${userId}`, 5, 60 * 60 * 1000).ok) {
           return NextResponse.json({ error: "Too many email change requests. Please try again later." }, { status: 429 })
         }
-        const { token, tokenHash } = createToken()
-        createEmailVerification(userId, tokenHash, tokenExpiry(24 * 60 * 60 * 1000), body.email)
-        sendEmailChangeEmail(body.email.trim(), `${getAppBaseUrl(req)}/verify-email?token=${token}`)
+        // Answer the same whether or not the address is taken, so this cannot be used to look up accounts.
+        if (!takenByOther) {
+          const { token, tokenHash } = createToken()
+          createEmailVerification(userId, tokenHash, tokenExpiry(24 * 60 * 60 * 1000), body.email)
+          sendEmailChangeEmail(body.email.trim(), `${getAppBaseUrl(req)}/verify-email?token=${token}`)
+        }
         return NextResponse.json({ success: true, pendingVerification: true })
       }
       updateUser(userId, { email: body.email })

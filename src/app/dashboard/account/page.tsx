@@ -34,7 +34,7 @@ export default function Page() {
     if (res.ok) {
       const data = await res.json().catch(() => ({}))
       if (data.pendingVerification) {
-        setSuccess("We sent a confirmation link to the new address. Your email changes once you open it.")
+        setSuccess("If that address can be used, we sent a confirmation link to it. Your email changes once you open it.")
       } else {
         setSuccess("Email updated successfully")
         setTimeout(() => router.refresh(), 1000)

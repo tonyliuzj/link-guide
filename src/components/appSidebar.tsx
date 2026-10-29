@@ -62,7 +62,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const [siteTitle, setSiteTitle] = useState("LinkGuide")
 
   useEffect(() => {
-    fetch("/api/settings")
+    fetch("/api/site")
       .then(res => res.json())
       .then(data => {
         if (data.site_title) {

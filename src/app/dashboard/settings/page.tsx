@@ -14,7 +14,7 @@ import { toast } from "sonner"
 import { signOut, useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { normalizeDomain } from "@/lib/domainUtils"
-import type { SiteSettings } from "@/types/models"
+import type { SettingsResponse } from "@/types/models"
 import { downloadFile } from "@/lib/utils"
 
 export default function Page() {
@@ -22,7 +22,8 @@ export default function Page() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [restoring, setRestoring] = useState(false)
-  const [settings, setSettings] = useState<SiteSettings | null>(null)
+  const [sendingTest, setSendingTest] = useState(false)
+  const [settings, setSettings] = useState<SettingsResponse | null>(null)
   const [turnstileLandingCreate, setTurnstileLandingCreate] = useState(false)
   const [turnstileLogin, setTurnstileLogin] = useState(false)
   const [turnstileSignup, setTurnstileSignup] = useState(false)
@@ -53,6 +54,18 @@ export default function Page() {
         setTurnstileSignup(data.turnstile_signup === 1)
       })
   }, [])
+
+  async function handleTestEmail() {
+    setSendingTest(true)
+    const res = await fetch("/api/settings/test-email", { method: "POST" })
+    const data = await res.json().catch(() => ({}))
+    if (res.ok) {
+      toast.success(`Test email sent to ${data.sentTo}`)
+    } else {
+      toast.error(data.error || "Failed to send test email")
+    }
+    setSendingTest(false)
+  }
 
   async function handleRestore(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -240,6 +253,22 @@ export default function Page() {
                   {loading ? "Saving..." : "Save Changes"}
                 </Button>
                 </form>
+
+                <Card className="mt-6">
+                  <CardHeader>
+                    <CardTitle>Email</CardTitle>
+                    <CardDescription>
+                      {settings.mail_configured
+                        ? "SMTP is configured: password reset, signup verification and email change confirmations are enabled."
+                        : "SMTP is not configured. Set SMTP_HOST and SMTP_FROM in the environment to enable password reset and email verification."}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <Button type="button" variant="outline" onClick={handleTestEmail} disabled={!settings.mail_configured || sendingTest}>
+                      {sendingTest ? "Sending..." : "Send test email to me"}
+                    </Button>
+                  </CardContent>
+                </Card>
 
                 <Card className="mt-6">
                   <CardHeader>

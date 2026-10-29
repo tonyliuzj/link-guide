@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { getSiteSettings, purgeOldStats, updateSiteSettings } from "@/lib/db"
+import { isMailConfigured } from "@/lib/mail"
 
 export const runtime = 'nodejs';
 
@@ -11,7 +12,7 @@ export async function GET() {
   }
 
   const settings = getSiteSettings()
-  return NextResponse.json(settings || { site_title: 'LinkGuide', site_domain: '' })
+  return NextResponse.json({ ...(settings || { site_title: 'LinkGuide', site_domain: '' }), mail_configured: isMailConfigured() })
 }
 
 export async function PUT(req: NextRequest) {

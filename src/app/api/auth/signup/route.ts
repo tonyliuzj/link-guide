@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { hash } from 'bcryptjs';
 import { createEmailVerification, createUser, getSiteSettings, getUserByEmail } from '@/lib/db';
 import { getAppBaseUrl, isMailConfigured } from '@/lib/mail';
-import { sendVerificationEmail } from '@/lib/verificationMail';
+import { sendAccountExistsEmail, sendVerificationEmail } from '@/lib/verificationMail';
 import { createToken, tokenExpiry } from '@/lib/tokens';
 import { getRequestIp, verifyTurnstileToken } from '@/lib/turnstile';
 import { rateLimit } from '@/lib/rateLimit';
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const body = await request.json();
+  const body = await request.json().catch(() => ({}));
   const { email, password, turnstileToken } = body;
 
   if (!email || !password) {
@@ -46,10 +46,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Password must be 8 to 128 characters' }, { status: 400 });
   }
 
+  // Hash first so the response time is the same whether or not the address is already registered.
+  const passwordHash = await hash(password, 10);
+  // With SMTP configured, new accounts must confirm their address before they can log in.
+  const verificationRequired = isMailConfigured();
+  const baseUrl = getAppBaseUrl(request);
+
   try {
-    const passwordHash = await hash(password, 10);
-    // With SMTP configured, new accounts must confirm their address before they can log in.
-    const verificationRequired = isMailConfigured();
+    const existing = getUserByEmail(email);
+
+    if (existing && verificationRequired) {
+      // Answer exactly like a fresh signup and tell the address owner by email instead.
+      if (rateLimit(`signup:email:${existing.email}`, 3, 60 * 60 * 1000).ok && existing.id !== 0) {
+        if (existing.email_verified === 1) {
+          sendAccountExistsEmail(existing.email, `${baseUrl}/login`, `${baseUrl}/forgot-password`);
+        } else {
+          const { token, tokenHash } = createToken();
+          createEmailVerification(existing.id, tokenHash, tokenExpiry(VERIFICATION_TTL_MS));
+          sendVerificationEmail(existing.email, `${baseUrl}/verify-email?token=${token}`);
+        }
+      }
+      return NextResponse.json({ success: true, verificationRequired });
+    }
+
+    if (existing) {
+      return NextResponse.json({ error: 'Email already exists' }, { status: 400 });
+    }
+
     createUser(email, passwordHash, 'user', !verificationRequired);
 
     if (verificationRequired) {
@@ -57,7 +80,7 @@ export async function POST(request: Request) {
       if (user) {
         const { token, tokenHash } = createToken();
         createEmailVerification(user.id, tokenHash, tokenExpiry(VERIFICATION_TTL_MS));
-        sendVerificationEmail(user.email, `${getAppBaseUrl(request)}/verify-email?token=${token}`);
+        sendVerificationEmail(user.email, `${baseUrl}/verify-email?token=${token}`);
       }
     }
 
@@ -65,7 +88,10 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     if (message.includes('UNIQUE constraint failed')) {
-      return NextResponse.json({ error: 'Email already exists' }, { status: 400 });
+      // Lost a race with another signup for the same address.
+      return verificationRequired
+        ? NextResponse.json({ success: true, verificationRequired })
+        : NextResponse.json({ error: 'Email already exists' }, { status: 400 });
     }
     return NextResponse.json({ error: message }, { status: 500 });
   }

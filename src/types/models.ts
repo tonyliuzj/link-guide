@@ -50,6 +50,8 @@ export type BlacklistItem = {
   created_at: string;
 };
 
+export type SettingsResponse = SiteSettings & { mail_configured?: boolean };
+
 export type SiteSettings = {
   site_title: string;
   site_domain: string;
